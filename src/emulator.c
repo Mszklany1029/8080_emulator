@@ -1,5 +1,66 @@
 #include <stdio.h>
 #include <stdlib.h>
+
+typedef struct ConditionCodes {
+	uint8_t z:1;
+	uint8_t s:1;
+	uint8_t p:1;
+	uint8_t cy:1;
+	uint8_t ac:1;
+	uint8_t pad:1;
+
+} ConditionCodes;
+
+typedef struct State8080 {
+	uint8_t a;
+	uint8_t b;
+	uint8_t c;
+	uint8_t d;
+	uint8_t e;
+	uint8_t h;
+	uint8_t l;
+	uint16_t sp;
+	uint16_t pc;
+	uint8_t	*memory;
+	struct ConditionCodes	cc;
+	uint8_t	int_enable;
+} State8080;
+
+void UnimplementedInstruction(State8080* state){
+	//undo program counter advance
+	printf("ERROR: Unimplemented instruction\n");
+	exit(1);
+}
+
+int Emulate8080op(State8080* state){
+	unsigned char *opcode = &state->memory[state->pc];
+
+	switch(*opcode){
+		case 0x00: break; //nop
+		case 0x01:	//LXI B,word
+				state -> c = opcode[1];
+				state -> b = opcode[2];
+				state -> pc += 2;	//advance 2 bytes
+				break;				   
+		case 0x02: UnimplementedInstruction(state); break;
+		case 0x03: UnimplementedInstruction(state); break;
+		case 0x04: UnimplementedInstruction(state); break;
+				   /*OTHER CASES HERE*/
+		case 0x41: state -> b = state -> c; break; //MOV B, C
+		case 0x42: state -> b = state -> d; break; //MOV B, D
+		case 0x43: state -> b = state -> e; break; //MOV B, E
+			/*OTHER CASES HERE*/
+		case 0xfe: UnimplementedInstruction(state); break;
+		case 0xff: UnimplementedInstruction(state); break;
+
+	}
+	state->pc +=1; //for opcode
+}
+
+
+
+
+
 /* 8080 Disassembling algorithm:
  * 1. Read code into buffer
  * 2. Get pointer to start of buffer
