@@ -32,6 +32,17 @@ void UnimplementedInstruction(State8080* state){
 	exit(1);
 }
 
+static inline void 8080_adc(State8080 state, uint8_t* const dest, uint8_t src, uint8_t carry){
+	uint8_t ans = *dest + src + carry;
+	state -> cc.z = ((ans & 0xff) == 0);
+	state -> cc.s = ((ans & 0x80) != 0);
+	state -> cc.cy = (ans > 0xff);
+	state -> cc.p = Parity(ans & 0xff);
+	*dest = ans; 
+}
+
+
+
 int Emulate8080op(State8080* state){
 	unsigned char *opcode = &state->memory[state->pc];
 
@@ -50,6 +61,106 @@ int Emulate8080op(State8080* state){
 		case 0x42: state -> b = state -> d; break; //MOV B, D
 		case 0x43: state -> b = state -> e; break; //MOV B, E
 			/*OTHER CASES HERE*/
+		case 0x80:
+			{
+			   uint16_t ans = (uint16_t) state-> a + (uint16_t) state -> b;
+			   state -> cc.z = ((ans & 0xff) == 0);
+			   state -> cc.s = ((ans & 0x80) != 0);
+			   state -> cc.cy = (ans > 0xff);
+			   state -> cc.p = Parity(ans & 0xff);
+			   state -> a = ans & 0xff;
+			}
+		case 0x81: //ADD C
+			{
+
+			   uint16_t ans = (uint16_t) state-> a + (uint16_t) state -> c;
+			   state -> cc.z = ((ans & 0xff) == 0);
+			   state -> cc.s = ((ans & 0x80) != 0);
+			   state -> cc.cy = (ans > 0xff);
+			   state -> cc.p = Parity(ans & 0xff);
+			   state -> a = ans & 0xff;
+
+			}
+		case 0x82: 
+			{
+				uint16_t ans = (uint16_t) state -> a + (uint16_t) state -> d;
+				state -> cc.z ((ans & 0xff) == 0);
+				state -> cc.s ((ans & 0x80) != 0);
+				state -> cc.cy = (ans > 0xff);
+				state -> cc.p = Parity(ans & 0xff);
+				state -> a = ans & 0xff;
+			}
+		case 0x83: //add e
+			{
+				uint16_t ans = (uint16_t) state -> a + (uint16_t) state -> e;
+				state -> cc.z ((ans & 0xff) == 0);
+				state -> cc.s ((ans & 0x80) != 0);
+				state -> cc.cy = (ans > 0xff);
+				state -> cc.p = Parity(ans & 0xff);
+				state -> a = ans & 0xff;
+
+			}
+		case 0x84: //ADD H
+			{
+				uint16_t ans = (uint16_t) state -> a + (uint16_t) state -> h;
+				state -> cc.z ((ans & 0xff) == 0);
+				state -> cc.s ((ans & 0x80) != 0);
+				state -> cc.cy = (ans > 0xff);
+				state -> cc.p = Parity(ans & 0xff);
+				state -> a = ans & 0xff;
+
+			}
+		case 0x85: //ADD L
+			{
+				uint16_t ans = (uint16_t) state -> a + (uint16_t) state -> l;
+				state -> cc.z ((ans & 0xff) == 0);
+				state -> cc.s ((ans & 0x80) != 0);
+				state -> cc.cy = (ans > 0xff);
+				state -> cc.p = Parity(ans & 0xff);
+				state -> a = ans & 0xff;
+
+			}
+		case 0x86: //ADD M
+			{
+				uint16_t offset = (state->h << 8) | (state->l);
+				uint16_t ans = (uint16_t) state->a + state->memory[offset];
+				state -> cc.z = ((ans & 0xff) == 0);
+				state -> cc.s = ((ans & 0x80) != 0);
+				state -> cc.cy = (ans > 0xff);
+				state -> cc.p = Parity(ans & 0xff);
+				state -> a = answer & 0xff;
+			}
+		case 0x87: //ADD A
+			{
+				uint16_t ans = (uint16_t) state -> a + (uint16_t) state -> a;
+				state -> cc.z ((ans & 0xff) == 0);
+				state -> cc.s ((ans & 0x80) != 0);
+				state -> cc.cy = (ans > 0xff);
+				state -> cc.p = Parity(ans & 0xff);
+				state -> a = ans & 0xff;
+
+			}
+		case 0x88: 8080_adc(state, &state -> a, state -> b, state -> cc.cy); break;
+		case 0x89: 8080_adc(state, &state -> a, state -> c, state -> cc.cy); break;
+		case 0x8a: 8080_adc(state, &state -> a, state -> d, state -> cc.cy); break;
+		case 0x8b: 8080_adc(state, &state -> a, state -> e, state -> cc.cy); break;
+		case 0x8c: 8080_adc(state, &state -> a, state -> h, state -> cc.cy); break;
+		case 0x8d: 8080_adc(state, &state -> a, state -> l, state -> cc.cy); break;
+		case 0x8e: //ADC M
+			   {
+				   uint16_t offset = (state -> h << 8) | (state -> l);
+				   8080_adc(state, &state -> a, state -> memory[offset], state -> cc.cy);
+			   }
+		case 0x8f: 8080_adc(state, &state -> a, state -> a,  state-> cc.cy); break;
+		case 0xc6: //ADI byte	
+			   {
+				uint16_t ans = (uint16_t) state -> a + (uint16_t) opcode[1];
+			   	state -> cc.z = ((ans & 0xff) == 0);
+			   	state -> cc.s = ((ans & 0x80) != 0);
+			   	state -> cc.cy = (ans > 0xff);
+			   	state -> cc.p = Parity(ans & 0xff);
+			   	state -> a = ans & 0xff;
+			}
 		case 0xfe: UnimplementedInstruction(state); break;
 		case 0xff: UnimplementedInstruction(state); break;
 
