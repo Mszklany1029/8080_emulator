@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-
+#include <stdint.h>
 typedef struct ConditionCodes {
 	uint8_t z:1;
 	uint8_t s:1;
@@ -31,14 +31,14 @@ void UnimplementedInstruction(State8080* state){
 	printf("ERROR: Unimplemented instruction\n");
 	exit(1);
 }
-int parity(uint8_t val){
+int Parity(uint8_t val){
         return (val & 1) == 0;
 }
 
 /*
  * NOTE TO SELF: MIGHT HAVE TO CHANGE THINGS HERE FROM UINT8_T TO UINT16_T 
  */
-static inline void 8080_adc(State8080 state, uint8_t* const dest, uint8_t src, uint8_t carry){
+static inline void e8080_adc(State8080* state, uint8_t* const dest, uint8_t src, uint8_t carry){
 	uint8_t ans = *dest + src + carry;
 	state -> cc.z = ((ans & 0xff) == 0);
 	state -> cc.s = ((ans & 0x80) != 0);
@@ -47,7 +47,7 @@ static inline void 8080_adc(State8080 state, uint8_t* const dest, uint8_t src, u
 	*dest = ans; 
 }
 
-static inline void 8080_sub(State8080 state, uint8_t* const dest, uint8_t src){
+static inline void e8080_sub(State8080* state, uint8_t* const dest, uint8_t src){
         uint8_t ans = *dest - src; 
         state -> cc.z = ((ans & 0xff) == 0);
         state -> cc.s = ((ans & 0x80) != 0);
@@ -56,7 +56,7 @@ static inline void 8080_sub(State8080 state, uint8_t* const dest, uint8_t src){
         *dest = ans; 
 }
 
-static inline void 8080_sbb(State8080 state, uint8_t* const dest, uint8_t src, uint8_t carry){
+static inline void e8080_sbb(State8080* state, uint8_t* const dest, uint8_t src, uint8_t carry){
         uint8_t ans = (*dest - src) - carry; 
         state -> cc.z = ((ans & 0xff) == 0);
         state -> cc.s = ((ans & 0x80) != 0);
@@ -65,7 +65,7 @@ static inline void 8080_sbb(State8080 state, uint8_t* const dest, uint8_t src, u
         *dest = ans; 
 }
 
-static inline void 8080_dcr(State8080 state, uint8_t* const dest){
+static inline void e8080_dcr(State8080* state, uint8_t* const dest){
         uint8_t ans = *dest - 1;
         state -> cc.z = ((ans & 0xff) == 0);
         state -> cc.s = ((ans & 0x80) != 0);
@@ -73,13 +73,47 @@ static inline void 8080_dcr(State8080 state, uint8_t* const dest){
         *dest = ans; 
 }
 
-static inline void 8080_inr(State8080 state, uint8_t* const dest){
+static inline void e8080_inr(State8080* state, uint8_t* const dest){
         uint8_t ans = *dest + 1;
         state -> cc.z = ((ans & 0xff) == 0);
         state -> cc.s = ((ans & 0x80) == 0);
         state -> cc.p = Parity(ans & 0xff);
         *dest = ans; 
 }
+
+static inline uint16_t get_bc_pair(State8080* state){
+        return (state->b << 8) | state -> c; 
+}
+
+static inline void set_bc_pair(State8080* state, uint16_t val){
+        state -> b = val >> 8; // right shift val 8 bits to get the highorder bits into first register
+        state -> c = val & 0xff; // AND 0xff allows us to get only the last 8 bits of val
+}
+
+static inline uint16_t get_de_pair(State8080* state){
+        return (state -> d << 8) | state -> e; 
+}
+
+static inline void set_de_pair(State8080* state, uint16_t val){
+        state -> d = val >> 8;
+        state -> e = val & 0xff;
+}
+
+static inline uint16_t get_hl_pair(State8080* state){
+        return (state -> h << 8) | state -> l;
+}
+
+static inline void set_hl_pair(State8080* state, uint16_t val){
+        state -> h = val >> 8;
+        state -> l = val & 0xff; 
+}
+
+static inline void e8080_dad(State8080* state, uint16_t addend_pair){
+        uint16_t ans = get_hl_pair(state) + addend_pair;
+        state -> cc.cy = (ans >> 16) & 1; 
+        set_hl_pair(state, ans);
+}
+
 int Emulate8080op(State8080* state){
 	unsigned char *opcode = &state->memory[state->pc];
 
@@ -91,35 +125,38 @@ int Emulate8080op(State8080* state){
 				state -> pc += 2;	//advance 2 bytes
 				break;				   
 		case 0x02: UnimplementedInstruction(state); break;
-		case 0x03: UnimplementedInstruction(state); break; //INX B
-		case 0x04: UnimplementedInstruction(state); break; //INR B
-                case 0x05: 8080_dcr(state, &state -> b); break;
-                case 0x09: //DAD B
-                case 0x0b: //DCX B
-                case 0x0c: 8080_inr(state, &state -> c); break;
-                case 0x0d: 8080_dcr(state, &state -> c); break;
-                case 0x13: //INX D
-                case 0x14: 8080_inr(state, &state -> d); break; 
-                case 0x15: 8080_dcr(state, &state -> d); break; 
-                case 0x19: //DAD D
-                case 0x1b: //DCX D
-                case 0x1c: 8080_inr(state, &state -> e); break;
-                case 0x1d: 8080_dcr(state, &state -> e); break; 
-                case 0x23: //INX H
-                case 0x24: 8080_inr(state, *state -> h); break;
-                case 0x25: 8080_dcr(state, &state -> h); break;
+		case 0x03: set_bc_pair(state, get_bc_pair(state) + 1); break; //INX B
+		case 0x04: e8080_inr(state, &state -> b); break; //INR B
+                case 0x05: e8080_dcr(state, &state -> b); break;
+                case 0x09: e8080_dad(state, get_bc_pair(state)); break;//DAD B
+                case 0x0b: set_bc_pair(state, get_bc_pair(state) - 1); break;//DCX B
+                case 0x0c: e8080_inr(state, &state -> c); break;
+                case 0x0d: e8080_dcr(state, &state -> c); break;
+                case 0x13: set_de_pair(state, get_de_pair(state) + 1); break;//INX D
+                case 0x14: e8080_inr(state, &state -> d); break; 
+                case 0x15: e8080_dcr(state, &state -> d); break; 
+                case 0x19: e8080_dad(state, get_de_pair(state)); break;//DAD D
+                case 0x1b: set_de_pair(state, get_de_pair(state) - 1); break;//DCX D
+                case 0x1c: e8080_inr(state, &state -> e); break;
+                case 0x1d: e8080_dcr(state, &state -> e); break; 
+                case 0x23: set_hl_pair(state, get_hl_pair(state) + 1);
+                case 0x24: e8080_inr(state, &state -> h); break;
+                case 0x25: e8080_dcr(state, &state -> h); break;
                 case 0x27: //DAA
-                case 0x29: //DAD H
+                /*case 0x29: //DAD H
                 case 0x2b: //DCX H
-                case 0x2c: 8080_inr(state, &state -> l); break; 
-                case 0x2d: 8080_dcr(state, &state -> l); break;
-                case 0x33: //INX SP
-                case 0x34: 8080_inr(state, &state -> m); break;//FIXXXXXX THESE AFFECT REGISTER PAIRS NOT SINGLE REGISTERS
-                case 0x35: 8080_dcr(state, &state -> m); break;//FIXXXXXXXXX
-                case 0x39: //DAD SP
-                case 0x3b: //DCX SP
-                case 0x3c: 8080_inr(state, &state -> a); break;
-                case 0x3d: 8080_dcr(state, &state -> a); break;
+                case 0x2c: e8080_inr(state, &state -> l); break;*/ 
+                case 0x29: e8080_dad(state, get_hl_pair(state)); break;//DAD H
+                case 0x2b: set_hl_pair(state, get_hl_pair(state) - 1); 
+                case 0x2c: e8080_inr(state, &state -> l); break; 
+                case 0x2d: e8080_dcr(state, &state -> l); break;
+                case 0x33: state -> sp = state -> sp + 1; //INX SP
+                /*case 0x34: e8080_inr(state, &state -> m); break;//FIXXXXXX THESE AFFECT REGISTER PAIRS NOT SINGLE REGISTERS
+                case 0x35: e8080_dcr(state, &state -> m); break;//FIXXXXXXXXX*/
+                case 0x39: e8080_dad(state, state->sp);//DAD SP
+                case 0x3b: state -> sp = state -> sp - 1; //DCX SP
+                case 0x3c: e8080_inr(state, &state -> a); break;
+                case 0x3d: e8080_dcr(state, &state -> a); break;
 				   /*OTHER CASES HERE*/
 		case 0x41: state -> b = state -> c; break; //MOV B, C
 		case 0x42: state -> b = state -> d; break; //MOV B, D
@@ -148,8 +185,8 @@ int Emulate8080op(State8080* state){
 		case 0x82: 
 			{
 				uint16_t ans = (uint16_t) state -> a + (uint16_t) state -> d;
-				state -> cc.z ((ans & 0xff) == 0);
-				state -> cc.s ((ans & 0x80) != 0);
+				state -> cc.z = ((ans & 0xff) == 0);
+				state -> cc.s = ((ans & 0x80) != 0);
 				state -> cc.cy = (ans > 0xff);
 				state -> cc.p = Parity(ans & 0xff);
 				state -> a = ans & 0xff;
@@ -157,8 +194,8 @@ int Emulate8080op(State8080* state){
 		case 0x83: //add e
 			{
 				uint16_t ans = (uint16_t) state -> a + (uint16_t) state -> e;
-				state -> cc.z ((ans & 0xff) == 0);
-				state -> cc.s ((ans & 0x80) != 0);
+				state -> cc.z = ((ans & 0xff) == 0);
+				state -> cc.s = ((ans & 0x80) != 0);
 				state -> cc.cy = (ans > 0xff);
 				state -> cc.p = Parity(ans & 0xff);
 				state -> a = ans & 0xff;
@@ -167,8 +204,8 @@ int Emulate8080op(State8080* state){
 		case 0x84: //ADD H
 			{
 				uint16_t ans = (uint16_t) state -> a + (uint16_t) state -> h;
-				state -> cc.z ((ans & 0xff) == 0);
-				state -> cc.s ((ans & 0x80) != 0);
+				state -> cc.z = ((ans & 0xff) == 0);
+				state -> cc.s = ((ans & 0x80) != 0);
 				state -> cc.cy = (ans > 0xff);
 				state -> cc.p = Parity(ans & 0xff);
 				state -> a = ans & 0xff;
@@ -177,8 +214,8 @@ int Emulate8080op(State8080* state){
 		case 0x85: //ADD L
 			{
 				uint16_t ans = (uint16_t) state -> a + (uint16_t) state -> l;
-				state -> cc.z ((ans & 0xff) == 0);
-				state -> cc.s ((ans & 0x80) != 0);
+				state -> cc.z = ((ans & 0xff) == 0);
+				state -> cc.s = ((ans & 0x80) != 0);
 				state -> cc.cy = (ans > 0xff);
 				state -> cc.p = Parity(ans & 0xff);
 				state -> a = ans & 0xff;
@@ -192,54 +229,54 @@ int Emulate8080op(State8080* state){
 				state -> cc.s = ((ans & 0x80) != 0);
 				state -> cc.cy = (ans > 0xff);
 				state -> cc.p = Parity(ans & 0xff);
-				state -> a = answer & 0xff;
+				state -> a = ans & 0xff;
 			}
 		case 0x87: //ADD A
 			{
 				uint16_t ans = (uint16_t) state -> a + (uint16_t) state -> a;
-				state -> cc.z ((ans & 0xff) == 0);
-				state -> cc.s ((ans & 0x80) != 0);
+				state -> cc.z = ((ans & 0xff) == 0);
+				state -> cc.s = ((ans & 0x80) != 0);
 				state -> cc.cy = (ans > 0xff);
 				state -> cc.p = Parity(ans & 0xff);
 				state -> a = ans & 0xff;
 
 			}
-		case 0x88: 8080_adc(state, &state -> a, state -> b, state -> cc.cy); break;
-		case 0x89: 8080_adc(state, &state -> a, state -> c, state -> cc.cy); break;
-		case 0x8a: 8080_adc(state, &state -> a, state -> d, state -> cc.cy); break;
-		case 0x8b: 8080_adc(state, &state -> a, state -> e, state -> cc.cy); break;
-		case 0x8c: 8080_adc(state, &state -> a, state -> h, state -> cc.cy); break;
-		case 0x8d: 8080_adc(state, &state -> a, state -> l, state -> cc.cy); break;
+		case 0x88: e8080_adc(state, &state -> a, state -> b, state -> cc.cy); break;
+		case 0x89: e8080_adc(state, &state -> a, state -> c, state -> cc.cy); break;
+		case 0x8a: e8080_adc(state, &state -> a, state -> d, state -> cc.cy); break;
+		case 0x8b: e8080_adc(state, &state -> a, state -> e, state -> cc.cy); break;
+		case 0x8c: e8080_adc(state, &state -> a, state -> h, state -> cc.cy); break;
+		case 0x8d: e8080_adc(state, &state -> a, state -> l, state -> cc.cy); break;
 		case 0x8e: //ADC M
 			   {
 				   uint16_t offset = (state -> h << 8) | (state -> l);
-				   8080_adc(state, &state -> a, state -> memory[offset], state -> cc.cy);
+				   e8080_adc(state, &state -> a, state -> memory[offset], state -> cc.cy);
 			   }
-		case 0x8f: 8080_adc(state, &state -> a, state -> a,  state-> cc.cy); break;
-                case 0x90: 8080_sub(state, &state -> a, state -> b); break;
-                case 0x91: 8080_sub(state, &state -> a, state -> c); break;
-                case 0x92: 8080_sub(state, &state -> a, state -> d); break;
-                case 0x93: 8080_sub(state, &state -> a, state -> e); break;
-                case 0x94: 8080_sub(state, &state -> a, state -> h); break;
-                case 0x95: 8080_sub(state, &state -> a, state -> l); break;
+		case 0x8f: e8080_adc(state, &state -> a, state -> a,  state-> cc.cy); break;
+                case 0x90: e8080_sub(state, &state -> a, state -> b); break;
+                case 0x91: e8080_sub(state, &state -> a, state -> c); break;
+                case 0x92: e8080_sub(state, &state -> a, state -> d); break;
+                case 0x93: e8080_sub(state, &state -> a, state -> e); break;
+                case 0x94: e8080_sub(state, &state -> a, state -> h); break;
+                case 0x95: e8080_sub(state, &state -> a, state -> l); break;
                 case 0x96: //SUB M
                            {
                                    uint16_t offset = (state -> h << 8 | (state -> l));
-                                   8080_sub(state, &state -> a, state -> memory[offset]);
+                                   e8080_sub(state, &state -> a, state -> memory[offset]);
                            }
-                case 0x97: 8080_sub(state, &state -> a, state -> a); break;
-                case 0x98: 8080_sbb(state, &state -> a, state -> b, state -> cc.cy); break; 
-                case 0x99: 8080_sbb(state, &state -> a, state -> c, state -> cc.cy); break;
-                case 0x9a: 8080_sbb(state, &state -> a, state -> d, state -> cc.cy); break;
-                case 0x9b: 8080_sbb(state, &state -> a, state -> e, state -> cc.cy); break;
-                case 0x9c: 8080_sbb(state, &state -> a, state -> h, state -> cc.cy); break;
-                case 0x9d: 8080_sbb(state, &state -> a, state -> l, state -> cc.cy); break;
+                case 0x97: e8080_sub(state, &state -> a, state -> a); break;
+                case 0x98: e8080_sbb(state, &state -> a, state -> b, state -> cc.cy); break; 
+                case 0x99: e8080_sbb(state, &state -> a, state -> c, state -> cc.cy); break;
+                case 0x9a: e8080_sbb(state, &state -> a, state -> d, state -> cc.cy); break;
+                case 0x9b: e8080_sbb(state, &state -> a, state -> e, state -> cc.cy); break;
+                case 0x9c: e8080_sbb(state, &state -> a, state -> h, state -> cc.cy); break;
+                case 0x9d: e8080_sbb(state, &state -> a, state -> l, state -> cc.cy); break;
                 case 0x9e: //SBB M
                            {
                                 uint16_t offset = (state -> h << 8 | (state -> l));
-                                8080_sub(state, &state -> a, state -> memory[offset], state -> cc.cy);
+                                e8080_sub(state, &state -> a, state -> memory[offset]);
                            }
-                case 0x9f: 8080_sbb(state, &state -> a, state -> a, state -> cc.cy;) break;
+                case 0x9f: e8080_sbb(state, &state -> a, state -> a, state -> cc.cy); break;
 		case 0xc6: //ADI byte	
 			   {
 				uint16_t ans = (uint16_t) state -> a + (uint16_t) opcode[1];
@@ -572,9 +609,9 @@ int main(int argc, char**argv){
 	fseek(f, 0L, SEEK_END);
 	int fsize = ftell(f);
 	fseek(f, 0L, SEEK_SET);
+        
+        unsigned char *buffer = malloc(fsize);
 
-	unsigned char *buffer = malloc(fsize);
-	
 	fread(buffer, fsize, 1, f);
 	fclose(f);
 
