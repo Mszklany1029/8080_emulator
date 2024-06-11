@@ -114,6 +114,75 @@ static inline void e8080_dad(State8080* state, uint16_t addend_pair){
         set_hl_pair(state, ans);
 }
 
+static inline void e8080_add(State8080* state, uint8_t val, uint8_t carry){
+        uint16_t ans = (uint16_t) state -> a + (uint16_t) val + state -> cc.cy;
+        state -> cc.z = ((ans & 0xff) == 0);
+        state -> cc.s = ((ans & 0x80) != 0);
+        state -> cc.cy = (ans > 0xff);
+        state -> cc.p = Parity(ans & 0xff);
+        state -> a = ans & 0xff;
+}
+
+static inline void jmp_ncond(State8080* state, uint8_t cond, unsigned char *opcode){
+        if(0 == cond){
+                state -> pc = (opcode[2] << 8) | opcode[1];
+        }else{
+                state -> pc += 2; 
+        }
+}
+
+static inline void jmp_cond(State8080* state, uint8_t cond, unsigned char *opcode){
+        if(1 == cond){
+                state -> pc = (opcode[2] << 8) | opcode[1];
+        }else{
+                state -> pc += 2; 
+        }
+}
+
+static inline void e8080_call(State8080* state){
+        uint16_t ret = state -> pc+2;
+        state -> memory[state -> sp-1] = (ret >> 8) & 0xff;
+        state -> memory[state -> sp-2] = (ret & 0xff);
+        state -> sp = state -> sp - 2;
+        state -> pc = (opcode[2] << 8) | opcode[1];
+}
+
+static inline void e8080_ret(State8080* state){
+        state -> pc = state->memory[state->sp] | (state -> memory[state -> sp +1] << 8);
+        state -> sp += 2;
+}
+
+static inline void ncond_call(State8080* state, uint8_t cond){
+        if(0 == cond){
+                e8080_call(state);
+        }
+}
+
+static inline void cond_call(State8080* state, uint8_t cond){
+        if(1 == cond){
+                e8080_call(state);
+        }
+}
+
+static inline void ncond_ret(State8080* state, uint8_t cond){
+        if(0 == cond){
+                e8080_ret(state);
+        }
+}
+
+static inline void cond_ret(State8080* state, uint8_t cond){
+        if(1 == cond){
+                e8080_ret(state);
+        }
+}
+
+static inline void e8080_rst(State8080* state, uint16_t hl_pair, uint8_t nnn){
+        state -> memory[state -> sp-1] = (hl_pair >> 8) & 0xff;
+        state -> memory[state -> sp-2] = hl_pair & 0xff;
+        state -> sp = state -> sp - 2;
+        state -> pc = 8 * nnn;
+}
+
 int Emulate8080op(State8080* state){
 	unsigned char *opcode = &state->memory[state->pc];
 
@@ -277,19 +346,59 @@ int Emulate8080op(State8080* state){
                                 e8080_sub(state, &state -> a, state -> memory[offset]);
                            }
                 case 0x9f: e8080_sbb(state, &state -> a, state -> a, state -> cc.cy); break;
-		case 0xc6: //ADI byte	
-			   {
+                case 0xc0: ncond_ret(state, &state -> cc.z); break; // RNZ
+                case 0xc2: jmp_ncond(state, &state -> cc.z, opcode); break; //JNZ ADR
+                case 0xc3:      //JMP ADR
+                           state -> pc = (opcode[2] << 8) | opcode[1];
+                           break;
+                case 0xc4: ncond_call(state, &state -> cc.z); break; //CNZ adr
+		case 0xc6: e8080_add(state, opcode[1], 0); break; //ADI byte	//MIGHT CAUSE ISSUES!!!
+                case 0xc7: e8080_rst(state, get_hl_pair(state), 0); break; //RST 0
+			   /*{
 				uint16_t ans = (uint16_t) state -> a + (uint16_t) opcode[1];
 			   	state -> cc.z = ((ans & 0xff) == 0);
 			   	state -> cc.s = ((ans & 0x80) != 0);
 			   	state -> cc.cy = (ans > 0xff);
 			   	state -> cc.p = Parity(ans & 0xff);
 			   	state -> a = ans & 0xff;
-			}
-                case 0xce: //ACI D8
-                case 0xde: //SBI D8
+			}*/
+                case 0xc8: cond_ret(state, &state -> cc.z); break;//RZ
+                case 0xc9: e8080_ret(state); break; //RET
+                case 0xca: jmp_cond(state, &state -> cc.z, opcode); break;//JZ ADR
+                case 0xcc: cond_call(state, &state -> cc.z); break;//CZ ADR
+                case 0xcd: e8080_call(state); break; //CALL ADR
+                case 0xce: e8080_add(state, opcode[1], &state -> cc.cy); break;//ACI D8 //MIGHT CAUSE ISSUES!
+                case 0xcf: e8080_rst(state, get_hl_pair(state), 1); break; //RST 1
+                case 0xd0: ncond_ret(state, &state -> cc.cy); break;//RNC
+                case 0xd2: jmp_ncond(state, &state -> cc.cy, opcode); break;//JNC ADR
+                                                                
+                case 0xd4: ncond_call(state, &state -> cc.cy); break;//CNC ADR
+                case 0xd7: e8080_rst(state, get_hl_pair(state), 2); break; //RST 2
+                case 0xd8: cond_ret(state, &state -> cc.cy); break;//RC
+                case 0xda: jmp_cond(state, &state -> cc.cy, opcode); break;//JC ADR
+                case 0xdc: cond_call(state, &state -> cc.cy); break; //CC ADR
+                case 0xde: e8080_sbb(state, &state -> a, opcode[1], &state -> cc.cy); break; //ISSUES???
+                case 0xdf: e8080_rst(state, get_hl_pair(state); 3); break; //RST 3
+                case 0xe0: ncond_ret(state, &state -> cc.p); break;//RPO
+                case 0xe2: jmp_ncond(state, &state -> cc.p, opcode); break; //JPO ADR
+                case 0xe4: ncond_call(state, &state -> cc.p); break; //CPO ADR
+                case 0xe7: e8080_rst(state, get_hl_pair(state), 4); break; //RST 4
+                case 0xe8: cond_ret(state, &state -> cc.p); break;//RPE
+                case 0xe9: //PCHL
+                           state -> pc = (state -> h << 8) | (state -> l);
+                           break;
+                case 0xea: jmp_cond(state, &state -> cc.p, opcode); break; //JPE ADR
+                case 0xec: cond_call(state, &state -> cc.p); break; //CPE adr
+                case 0xef: e8080(state, get_hl_pair(state), 5); break; //RST 5
+                case 0xf0: ncond_ret(state, &state -> cc.s); break; //RP
+                case 0xf2: jmp_ncond(state, &state -> cc.s, opcode); break;//JP ADR
+                case 0xf4: ncond_call(state, &state -> cc.s); break; //CP adr
+                case 0xf7: e8080_rst(state, get_hl_pair(state), 6); break; //RST 6
+                case 0xf8: cond_ret(state, &state -> cc.s); break;
+                case 0xfa: jmp_cond(state, &state -> cc.s, opcode); break;//JM ADR
+                case 0xfc: cond_call(state, &state -> cc.s); break; //CM adr
 		case 0xfe: UnimplementedInstruction(state); break;
-		case 0xff: UnimplementedInstruction(state); break;
+		case 0xff: e8080_rst(state, get_hl_pair(state), 7); break; //RST 7
 
 	}
 	state->pc +=1; //for opcode
