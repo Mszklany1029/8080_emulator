@@ -183,6 +183,12 @@ static inline void e8080_rst(State8080* state, uint16_t hl_pair, uint8_t nnn){
         state -> pc = 8 * nnn;
 }
 
+static inline void e8080_rlc(State8080* state){
+        uint8_t x = state -> a;
+        state -> a = ((x << 1) | x >> 7); //COME BACK
+        state -> cc.cy = (1 == (1 >> 7));
+}
+
 int Emulate8080op(State8080* state){
 	unsigned char *opcode = &state->memory[state->pc];
 
@@ -197,17 +203,21 @@ int Emulate8080op(State8080* state){
 		case 0x03: set_bc_pair(state, get_bc_pair(state) + 1); break; //INX B
 		case 0x04: e8080_inr(state, &state -> b); break; //INR B
                 case 0x05: e8080_dcr(state, &state -> b); break;
+                case 0x07: e8080_rlc(state); break; //RLC
                 case 0x09: e8080_dad(state, get_bc_pair(state)); break;//DAD B
                 case 0x0b: set_bc_pair(state, get_bc_pair(state) - 1); break;//DCX B
                 case 0x0c: e8080_inr(state, &state -> c); break;
                 case 0x0d: e8080_dcr(state, &state -> c); break;
+                case 0x0f: //RRC
                 case 0x13: set_de_pair(state, get_de_pair(state) + 1); break;//INX D
                 case 0x14: e8080_inr(state, &state -> d); break; 
-                case 0x15: e8080_dcr(state, &state -> d); break; 
+                case 0x15: e8080_dcr(state, &state -> d); break;
+                case 0x17: //RAL
                 case 0x19: e8080_dad(state, get_de_pair(state)); break;//DAD D
                 case 0x1b: set_de_pair(state, get_de_pair(state) - 1); break;//DCX D
                 case 0x1c: e8080_inr(state, &state -> e); break;
-                case 0x1d: e8080_dcr(state, &state -> e); break; 
+                case 0x1d: e8080_dcr(state, &state -> e); break;
+                case 0x1f: //RAR
                 case 0x23: set_hl_pair(state, get_hl_pair(state) + 1);
                 case 0x24: e8080_inr(state, &state -> h); break;
                 case 0x25: e8080_dcr(state, &state -> h); break;
