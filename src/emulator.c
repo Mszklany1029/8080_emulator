@@ -189,6 +189,12 @@ static inline void e8080_rlc(State8080* state){
         state -> cc.cy = (1 == (1 >> 7));
 }
 
+static inline void e8080_rrc(State8080* state){
+        uint8_t x = state -> a; 
+        state -> a = ((x & 1) << 7 | (x >> 1));
+        state -> cc.cy = (1 == (x & 1));
+}
+
 int Emulate8080op(State8080* state){
 	unsigned char *opcode = &state->memory[state->pc];
 
@@ -208,7 +214,7 @@ int Emulate8080op(State8080* state){
                 case 0x0b: set_bc_pair(state, get_bc_pair(state) - 1); break;//DCX B
                 case 0x0c: e8080_inr(state, &state -> c); break;
                 case 0x0d: e8080_dcr(state, &state -> c); break;
-                case 0x0f: //RRC
+                case 0x0f: e8080_rrc(state); break; //RRC
                 case 0x13: set_de_pair(state, get_de_pair(state) + 1); break;//INX D
                 case 0x14: e8080_inr(state, &state -> d); break; 
                 case 0x15: e8080_dcr(state, &state -> d); break;
