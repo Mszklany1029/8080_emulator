@@ -2,12 +2,12 @@
 #include <stdlib.h>
 #include <stdint.h>
 typedef struct ConditionCodes {
-	uint8_t z:1;
-	uint8_t s:1;
-	uint8_t p:1;
-	uint8_t cy:1;
-	uint8_t ac:1;
-	uint8_t pad:1;
+	uint8_t z:1; //zero flag: set if value is 0
+	uint8_t s:1; //sign flag: set if most significant bit is 1 (negative)
+	uint8_t p:1; //parity flag: set if even, reset if odd
+	uint8_t cy:1; //carry flag; set if high order bit is borrowed or carried
+	uint8_t ac:1; //aux carry: set if carry out of bit 3 into bit 4
+	uint8_t pad:3; //COME BACK TO THIS?? 
 
 } ConditionCodes;
 
@@ -115,7 +115,7 @@ static inline void e8080_dad(State8080* state, uint16_t addend_pair){
 }
 
 static inline void e8080_add(State8080* state, uint8_t val, uint8_t carry){
-        uint16_t ans = (uint16_t) state -> a + (uint16_t) val + state -> cc.cy;
+        uint16_t ans = (uint16_t) state -> a + (uint16_t) val + carry;
         state -> cc.z = ((ans & 0xff) == 0);
         state -> cc.s = ((ans & 0x80) != 0);
         state -> cc.cy = (ans > 0xff);
@@ -195,6 +195,43 @@ static inline void e8080_rrc(State8080* state){
         state -> cc.cy = (1 == (x & 1));
 }
 
+static inline void e8080_ral(State8080* state){
+        uint8_t x = state -> a;
+        uint8_t high_order = x >> 7;
+        state -> a = ((x << 1) | state -> cc.cy);
+        state -> cc.cy = high_order;
+}
+
+static inline void e8080_rar(State8080* state){
+        uint8_t x = state -> a;
+        uint8_t low_order = x & 1; 
+        state -> a = ((state -> cc.cy) << 7 | (x >> 1));
+        state -> cc.cy = low_order; 
+}
+
+static inline void e8080_cma(State8080* state){
+        state -> a = ~(state -> a);   
+}
+
+static inline void e8080_ana(State8080* state, uint8_t* const reg){
+        uint8_t x = state-> a & *reg;
+        state -> cc.z = (x == 0);
+        state -> cc.s = ((x >> 7) == 1);
+        state -> cc.cy = 0; //carry flag is cleared?
+        state -> cc.p = Parity(x);
+        state -> a = x; 
+}
+
+static inline void e8080_xra(State8080* state, uint_t* const reg){
+        uint8_t x = state -> a ^ *reg;
+        state -> cc.z = (x == 0);
+        state -> cc.s = ((x >> 7) == 1);
+        state -> cc.cy = 0;
+        state -> cc.ac = 0;
+        state -> cc.p = Parity(x);
+        state -> a = x;
+}
+
 int Emulate8080op(State8080* state){
 	unsigned char *opcode = &state->memory[state->pc];
 
@@ -218,12 +255,12 @@ int Emulate8080op(State8080* state){
                 case 0x13: set_de_pair(state, get_de_pair(state) + 1); break;//INX D
                 case 0x14: e8080_inr(state, &state -> d); break; 
                 case 0x15: e8080_dcr(state, &state -> d); break;
-                case 0x17: //RAL
+                case 0x17: e8080_ral(state); break;
                 case 0x19: e8080_dad(state, get_de_pair(state)); break;//DAD D
                 case 0x1b: set_de_pair(state, get_de_pair(state) - 1); break;//DCX D
                 case 0x1c: e8080_inr(state, &state -> e); break;
                 case 0x1d: e8080_dcr(state, &state -> e); break;
-                case 0x1f: //RAR
+                case 0x1f: e8080_rar(state); break;
                 case 0x23: set_hl_pair(state, get_hl_pair(state) + 1);
                 case 0x24: e8080_inr(state, &state -> h); break;
                 case 0x25: e8080_dcr(state, &state -> h); break;
@@ -235,6 +272,7 @@ int Emulate8080op(State8080* state){
                 case 0x2b: set_hl_pair(state, get_hl_pair(state) - 1); 
                 case 0x2c: e8080_inr(state, &state -> l); break; 
                 case 0x2d: e8080_dcr(state, &state -> l); break;
+                case 0x2f: e8080_cma(state); break;//CMA
                 case 0x33: state -> sp = state -> sp + 1; //INX SP
                 /*case 0x34: e8080_inr(state, &state -> m); break;//FIXXXXXX THESE AFFECT REGISTER PAIRS NOT SINGLE REGISTERS
                 case 0x35: e8080_dcr(state, &state -> m); break;//FIXXXXXXXXX*/
@@ -242,6 +280,7 @@ int Emulate8080op(State8080* state){
                 case 0x3b: state -> sp = state -> sp - 1; //DCX SP
                 case 0x3c: e8080_inr(state, &state -> a); break;
                 case 0x3d: e8080_dcr(state, &state -> a); break;
+                case 0x3f: state -> cc.cy = ~(state->cc.cy); break;
 				   /*OTHER CASES HERE*/
 		case 0x41: state -> b = state -> c; break; //MOV B, C
 		case 0x42: state -> b = state -> d; break; //MOV B, D
@@ -362,6 +401,31 @@ int Emulate8080op(State8080* state){
                                 e8080_sub(state, &state -> a, state -> memory[offset]);
                            }
                 case 0x9f: e8080_sbb(state, &state -> a, state -> a, state -> cc.cy); break;
+                case 0xa0: e8080_ana(state, &state -> b); break; //ANA B
+                case 0xa1: e8080_ana(state, &state -> c); break; //ANA C
+                case 0xa2: e8080_ana(state, &state -> d); break; //ANA D
+                case 0xa3: e8080_ana(state, &state -> e); break; //ANA E
+                case 0xa4: e8080_ana(state, &state -> h); break; //ANA H
+                case 0xa5: e8080_ana(state, &state -> l); break; //ANA L
+                case 0xa6: //ANA M 
+                           {
+                                   uint16_t offset = get_hl_pair(state);
+                                   e8080_ana(state, &state->memory[offset]);
+                           }
+                case 0xa7: e8080_ana(state, &state -> a); break; //ANA A
+        
+                case 0xa8: e8080_xra(state, &state -> b); break; //XRA B
+                case 0xa9: e8080_xra(state, &state -> c); break; //XRA C
+                case 0xaa: e8080_xra(state, &state -> d); break; //XRA D
+                case 0xab: e8080_xra(state, &state -> e); break; //XRA E
+                case 0xac: e8080_xra(state, &state -> h); break; //XRA H
+                case 0xad: e8080_xra(state, &state -> l); break; //XRA L
+                case 0xae: //XRA M
+                           {
+                                   uint16_t offset = get_hl_pair(state);
+                                   e8080_xra(state, &state -> memory[offset]);
+                           }
+                case 0xaf: e8080_xra(state, &state -> a); break; //XRA A
                 case 0xc0: ncond_ret(state, &state -> cc.z); break; // RNZ
                 case 0xc2: jmp_ncond(state, &state -> cc.z, opcode); break; //JNZ ADR
                 case 0xc3:      //JMP ADR
@@ -383,7 +447,7 @@ int Emulate8080op(State8080* state){
                 case 0xca: jmp_cond(state, &state -> cc.z, opcode); break;//JZ ADR
                 case 0xcc: cond_call(state, &state -> cc.z); break;//CZ ADR
                 case 0xcd: e8080_call(state); break; //CALL ADR
-                case 0xce: e8080_add(state, opcode[1], &state -> cc.cy); break;//ACI D8 //MIGHT CAUSE ISSUES!
+                case 0xce: e8080_add(state, opcode[1], state -> cc.cy); break;//ACI D8 //MIGHT CAUSE ISSUES!
                 case 0xcf: e8080_rst(state, get_hl_pair(state), 1); break; //RST 1
                 case 0xd0: ncond_ret(state, &state -> cc.cy); break;//RNC
                 case 0xd2: jmp_ncond(state, &state -> cc.cy, opcode); break;//JNC ADR
@@ -405,7 +469,7 @@ int Emulate8080op(State8080* state){
                            break;
                 case 0xea: jmp_cond(state, &state -> cc.p, opcode); break; //JPE ADR
                 case 0xec: cond_call(state, &state -> cc.p); break; //CPE adr
-                case 0xef: e8080(state, get_hl_pair(state), 5); break; //RST 5
+                case 0xef: e8080_rst(state, get_hl_pair(state), 5); break; //RST 5
                 case 0xf0: ncond_ret(state, &state -> cc.s); break; //RP
                 case 0xf2: jmp_ncond(state, &state -> cc.s, opcode); break;//JP ADR
                 case 0xf4: ncond_call(state, &state -> cc.s); break; //CP adr
