@@ -258,8 +258,8 @@ static inline void e8080_push(State8080* state, uint8_t rh, uint8_t rl){
 }
 
 static inline void e8080_pop(State8080* state, uint8_t* const rh, uint8_t* const rl){
-        rl = state -> memory[state -> sp];
-        rh = state -> memory[state -> sp+1];
+        *rl = state -> memory[state -> sp];
+        *rh = state -> memory[state -> sp+1];
         state -> sp += 2; 
 }
 
