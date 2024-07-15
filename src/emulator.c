@@ -263,6 +263,19 @@ static inline void e8080_pop(State8080* state, uint8_t* const rh, uint8_t* const
         state -> sp += 2; 
 }
 
+static inline void e8080_stax(State8080* state, uint16_t reg_pair){
+        state -> memory[reg_pair] = state -> a;
+}
+
+static inline void e8080_mvi(State8080* state, uint8_t* const dest, uint8_t val){
+        *dest = val;
+        state -> pc++;
+}
+
+static inline void e8080_mov_m(State8080* state, uint8_t val){
+        uint16_t offset = get_hl_pair(state);
+        state -> memory[offset] = val;
+}
 
 int Emulate8080op(State8080* state){
 	unsigned char *opcode = &state->memory[state->pc];
@@ -274,28 +287,34 @@ int Emulate8080op(State8080* state){
 				state -> b = opcode[2];
 				state -> pc += 2;	//advance 2 bytes
 				break;				   
-		case 0x02: UnimplementedInstruction(state); break;
+		case 0x02: e8080_stax(state, get_bc_pair(state)); break; //STAX B
 		case 0x03: set_bc_pair(state, get_bc_pair(state) + 1); break; //INX B
 		case 0x04: e8080_inr(state, &state -> b); break; //INR B
                 case 0x05: e8080_dcr(state, &state -> b); break;
+                case 0x06: e8080_mvi(state, &state -> b, opcode[1]); break; //MVI B, D8
                 case 0x07: e8080_rlc(state); break; //RLC
                 case 0x09: e8080_dad(state, get_bc_pair(state)); break;//DAD B
                 case 0x0b: set_bc_pair(state, get_bc_pair(state) - 1); break;//DCX B
                 case 0x0c: e8080_inr(state, &state -> c); break;
                 case 0x0d: e8080_dcr(state, &state -> c); break;
+                case 0x0e: e8080_mvi(state, &state -> c, opcode[1]); break; //MVI C, D8     
                 case 0x0f: e8080_rrc(state); break; //RRC
+                case 0x12: e8080_stax(state, get_de_pair(state)); break; //STAX D
                 case 0x13: set_de_pair(state, get_de_pair(state) + 1); break;//INX D
                 case 0x14: e8080_inr(state, &state -> d); break; 
                 case 0x15: e8080_dcr(state, &state -> d); break;
+                case 0x16: e8080_mvi(state, &state -> d, opcode[1]); break; //MVI D, D8
                 case 0x17: e8080_ral(state); break;
                 case 0x19: e8080_dad(state, get_de_pair(state)); break;//DAD D
                 case 0x1b: set_de_pair(state, get_de_pair(state) - 1); break;//DCX D
                 case 0x1c: e8080_inr(state, &state -> e); break;
                 case 0x1d: e8080_dcr(state, &state -> e); break;
+                case 0x1e: e8080_mvi(state, &state -> e, opcode[1]); break; //MVI E, D8
                 case 0x1f: e8080_rar(state); break;
                 case 0x23: set_hl_pair(state, get_hl_pair(state) + 1);
                 case 0x24: e8080_inr(state, &state -> h); break;
                 case 0x25: e8080_dcr(state, &state -> h); break;
+                case 0x26: e8080_mvi(state, &state -> h, opcode[1]); break; //MVI H, D8
                 case 0x27: //DAA
                 /*case 0x29: //DAD H
                 case 0x2b: //DCX H
@@ -304,20 +323,134 @@ int Emulate8080op(State8080* state){
                 case 0x2b: set_hl_pair(state, get_hl_pair(state) - 1); 
                 case 0x2c: e8080_inr(state, &state -> l); break; 
                 case 0x2d: e8080_dcr(state, &state -> l); break;
+                case 0x2e: e8080_mvi(state, &state -> l, opcode[1]); break; //MVI L, D8
                 case 0x2f: e8080_cma(state); break;//CMA
                 case 0x33: state -> sp = state -> sp + 1; //INX SP
                 /*case 0x34: e8080_inr(state, &state -> m); break;//FIXXXXXX THESE AFFECT REGISTER PAIRS NOT SINGLE REGISTERS
                 case 0x35: e8080_dcr(state, &state -> m); break;//FIXXXXXXXXX*/
+                case 0x36: //MVI M, D8
+                           {
+                                   uint16_t offset = get_hl_pair(state);
+                                   state -> memory[offset] = opcode[1];
+                                   state -> pc++;
+                           }
+                           break;
                 case 0x37: state -> cc.cy = ~(state -> cc.cy); break; //STC
-                case 0x39: e8080_dad(state, state->sp);//DAD SP
-                case 0x3b: state -> sp = state -> sp - 1; //DCX SP
+                case 0x39: e8080_dad(state, state->sp); break;//DAD SP
+                case 0x3b: state -> sp = state -> sp - 1; break; //DCX SP
                 case 0x3c: e8080_inr(state, &state -> a); break;
                 case 0x3d: e8080_dcr(state, &state -> a); break;
+                case 0x3e: e8080_mvi(state, &state -> a, opcode[1]); break; //MVI A, D8
                 case 0x3f: state -> cc.cy = ~(state->cc.cy); break; //CMC
 				   /*OTHER CASES HERE*/
+                case 0x40: state -> b = state -> b; break; //MOV B, B
 		case 0x41: state -> b = state -> c; break; //MOV B, C
 		case 0x42: state -> b = state -> d; break; //MOV B, D
 		case 0x43: state -> b = state -> e; break; //MOV B, E
+                case 0x44: state -> b = state -> h; break; //MOV B, H
+                case 0x45: state -> b = state -> l; break; //MOV B, L
+                case 0x46: //MOV B, M
+                           {
+                                   uint16_t offset = get_hl_pair(state);
+                                   state -> b = state -> memory[offset];
+                           }
+                           break;
+                case 0x47: state -> b = state -> a; break; //MOV B, A
+
+                case 0x48: state -> c = state -> b; break; //MOV C, B
+                case 0x49: state -> c = state -> c; break; //MOV C, C
+                case 0x4a: state -> c = state -> d; break; //MOV C, D
+                case 0x4b: state -> c = state -> e; break; //MOV C, E
+                case 0x4c: state -> c = state -> h; break; //MOV C, H
+                case 0x4d: state -> c = state -> l; break; //MOV C, L
+                case 0x4e: //MOV C, M
+                           {
+                                   uint16_t offset = get_hl_pair(state);
+                                   state -> c = state -> memory[offset];
+                           }
+                           break;
+                case 0x4f: state -> c = state -> a; break; //MOV C, A
+                
+                case 0x50: state -> d = state -> b; break; //MOV D, B
+                case 0x51: state -> d = state -> c; break; //MOV D, C
+                case 0x52: state -> d = state -> d; break; //MOV D, D
+                case 0x53: state -> d = state -> e; break; //MOV D, E
+                case 0x54: state -> d = state -> h; break; //MOV D, H
+                case 0x55: state -> d = state -> l; break; //MOV D, L
+                case 0x56: //MOV D, M
+                           {
+                                   uint16_t offset = get_hl_pair(state);
+                                   state -> d = state -> memory[offset];
+                           }
+                           break;
+                case 0x57: state -> d = state -> a; break; //MOV D, A
+                
+                case 0x58: state -> e = state -> b; break; //MOV E, B
+                case 0x59: state -> e = state -> c; break; //MOV E, C
+                case 0x5a: state -> e = state -> d; break; //MOV E, D
+                case 0x5b: state -> e = state -> e; break; //MOV E, E
+                case 0x5c: state -> e = state -> h; break; //MOV E, H
+                case 0x5d: state -> e = state -> l; break; //MOV E, L
+                case 0x5e: //MOV E, M
+                           {
+                                   uint16_t offset = get_hl_pair(state);
+                                   state -> e = state -> memory[offset];
+                           }
+                           break;
+                case 0x5f: state -> e = state -> a; break; //MOV E, A
+
+                case 0x60: state -> h = state -> b; break; //MOV H, B
+                case 0x61: state -> h = state -> c; break; //MOV H, C
+                case 0x62: state -> h = state -> d; break; //MOV H, D
+                case 0x63: state -> h = state -> e; break; //MOV H, E
+                case 0x64: state -> h = state -> h; break; //MOV H, H
+                case 0x65: state -> h = state -> l; break; //MOV H, L
+                case 0x66: //MOV H, M
+                           {
+                                   uint16_t offset = get_hl_pair(state);
+                                   state -> h = state -> memory[offset];
+                           }
+                           break;
+                case 0x67: state -> h = state -> a; break; //MOV H, A
+
+                case 0x68: state -> l = state -> b; break; //MOV L, B
+                case 0x69: state -> l = state -> c; break; //MOV L, C
+                case 0x6a: state -> l = state -> d; break; //MOV L, D
+                case 0x6b: state -> l = state -> e; break; //MOV L, E
+                case 0x6c: state -> l = state -> h; break; //MOV L, H
+                case 0x6d: state -> l = state -> l; break; //MOV L, L
+                case 0x6e: //MOV L, M
+                           {
+                                   uint16_t offset = get_hl_pair(state);
+                                   state -> l = state -> memory[offset];
+                           }
+                           break;
+                case 0x6f: state -> l = state -> a; break; //MOV L, A
+
+                case 0x70: e8080_mov_m(state, state -> b); break; //MOV M, B
+                case 0x71: e8080_mov_m(state, state -> c); break; //MOV M, C
+                case 0x72: e8080_mov_m(state, state -> d); break; //MOV M, D
+                case 0x73: e8080_mov_m(state, state -> e); break; //MOV M, E
+                case 0x74: e8080_mov_m(state, state -> h); break; //MOV M, H
+                case 0x75: e8080_mov_m(state, state -> l); break; //MOV M, L
+                case 0x76: // HLT COME BACK
+                case 0x77: e8080_mov_m(state, state -> a); break; //MOV M, A
+                           
+                case 0x78: state -> a = state -> b; break; //MOV A, B
+                case 0x79: state -> a = state -> c; break; //MOV A, C
+                case 0x7a: state -> a = state -> d; break; //MOV A, D
+                case 0x7b: state -> a = state -> e; break; //MOV A, E
+                case 0x7c: state -> a = state -> h; break; //MOV A, H
+                case 0x7d: state -> a = state -> l; break; //MOV A, L
+                case 0x7e: //MOV A, M
+                           {
+                                   uint16_t offset = get_hl_pair(state);
+                                   state -> a = state -> memory[offset];
+                           }
+                           break;
+                case 0x7f: state -> a = state -> a; break; //MOV A, A
+
+
 			/*OTHER CASES HERE*/
 		case 0x80:
 			{
