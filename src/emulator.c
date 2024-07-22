@@ -70,6 +70,7 @@ static inline void e8080_dcr(State8080* state, uint8_t* const dest){
         state -> cc.z = ((ans & 0xff) == 0);
         state -> cc.s = ((ans & 0x80) != 0);
         state -> cc.p = Parity(ans & 0xff);
+        state -> cc.ac = ((ans & 0xf) == 0);
         *dest = ans; 
 }
 
@@ -78,6 +79,7 @@ static inline void e8080_inr(State8080* state, uint8_t* const dest){
         state -> cc.z = ((ans & 0xff) == 0);
         state -> cc.s = ((ans & 0x80) == 0);
         state -> cc.p = Parity(ans & 0xff);
+        state -> cc.ac = ((ans & 0xf) == 0);
         *dest = ans; 
 }
 
@@ -277,6 +279,12 @@ static inline void e8080_mov_m(State8080* state, uint8_t val){
         state -> memory[offset] = val;
 }
 
+static inline void e8080_lxi(State8080* state, uint8_t* const rh, uint8_t* const rl, uint8_t op3, uint8_t op2){
+        *rh = op3;
+        *rl = op2;
+        state -> pc += 2;
+}
+
 int Emulate8080op(State8080* state){
 	unsigned char *opcode = &state->memory[state->pc];
 
@@ -294,40 +302,104 @@ int Emulate8080op(State8080* state){
                 case 0x06: e8080_mvi(state, &state -> b, opcode[1]); break; //MVI B, D8
                 case 0x07: e8080_rlc(state); break; //RLC
                 case 0x09: e8080_dad(state, get_bc_pair(state)); break;//DAD B
+                case 0x0a: //LDAX B
+                           {
+                                   uint16_t offset = get_bc_pair(state);
+                                   state -> a = state -> memory[offset];
+                           }
+                           break;
                 case 0x0b: set_bc_pair(state, get_bc_pair(state) - 1); break;//DCX B
                 case 0x0c: e8080_inr(state, &state -> c); break;
                 case 0x0d: e8080_dcr(state, &state -> c); break;
                 case 0x0e: e8080_mvi(state, &state -> c, opcode[1]); break; //MVI C, D8     
                 case 0x0f: e8080_rrc(state); break; //RRC
+                case 0x11: e8080_lxi(state, &state -> d, &state -> e, opcode[2], opcode[1]); break; //LXI D, D16
                 case 0x12: e8080_stax(state, get_de_pair(state)); break; //STAX D
                 case 0x13: set_de_pair(state, get_de_pair(state) + 1); break;//INX D
-                case 0x14: e8080_inr(state, &state -> d); break; 
-                case 0x15: e8080_dcr(state, &state -> d); break;
+                case 0x14: e8080_inr(state, &state -> d); break; //INR D 
+                case 0x15: e8080_dcr(state, &state -> d); break; //DCR D
                 case 0x16: e8080_mvi(state, &state -> d, opcode[1]); break; //MVI D, D8
                 case 0x17: e8080_ral(state); break;
                 case 0x19: e8080_dad(state, get_de_pair(state)); break;//DAD D
+                case 0x1a: //LDAX D 
+                           {
+                                   uint16_t offset = get_de_pair(state);
+                                   state -> a = state -> memory[offset];
+                           }
+                           break;
                 case 0x1b: set_de_pair(state, get_de_pair(state) - 1); break;//DCX D
-                case 0x1c: e8080_inr(state, &state -> e); break;
-                case 0x1d: e8080_dcr(state, &state -> e); break;
+                case 0x1c: e8080_inr(state, &state -> e); break; //INR E
+                case 0x1d: e8080_dcr(state, &state -> e); break; //DCR E
                 case 0x1e: e8080_mvi(state, &state -> e, opcode[1]); break; //MVI E, D8
-                case 0x1f: e8080_rar(state); break;
-                case 0x23: set_hl_pair(state, get_hl_pair(state) + 1);
-                case 0x24: e8080_inr(state, &state -> h); break;
-                case 0x25: e8080_dcr(state, &state -> h); break;
+                case 0x1f: e8080_rar(state); break; //RAR
+                case 0x21: e8080_lxi(state, &state -> h, &state -> l, opcode[2], opcode[1]); break; //LXI H, D16
+                case 0x22: //SHLD ADR; THIS ONE COULD BE WRONG?? MIGHT NEED TO USE OPCODE
+                           {
+                                   uint16_t data = get_hl_pair(state);
+                                   uint16_t addr = (state -> memory[state -> pc+1]) << 8 | state -> memory[state -> pc];
+                                   state -> memory[addr] = data & 0xff;
+                                   state -> memory[addr+1] = data >> 8;
+                                   state -> pc += 2; 
+                           }
+                           break;
+                case 0x23: set_hl_pair(state, get_hl_pair(state) + 1); //INX H
+                case 0x24: e8080_inr(state, &state -> h); break; //INR H
+                case 0x25: e8080_dcr(state, &state -> h); break; //DCR H
                 case 0x26: e8080_mvi(state, &state -> h, opcode[1]); break; //MVI H, D8
-                case 0x27: //DAA
+                case 0x27: //DAA COMEBACKKKK
                 /*case 0x29: //DAD H
                 case 0x2b: //DCX H
                 case 0x2c: e8080_inr(state, &state -> l); break;*/ 
                 case 0x29: e8080_dad(state, get_hl_pair(state)); break;//DAD H
-                case 0x2b: set_hl_pair(state, get_hl_pair(state) - 1); 
-                case 0x2c: e8080_inr(state, &state -> l); break; 
-                case 0x2d: e8080_dcr(state, &state -> l); break;
+                case 0x2a: //LHLD ADR MIGHT BE WRONG??? YEAH DEF COME BACK MAYBE WAS SUPPOSED TO USE OPCODE
+                           {
+                                   uint16_t addr = (state -> memory[state -> pc+1]) << 8 | state -> memory[state -> pc];
+                                   uint16_t val = (state -> memory[addr+1]) << 8 | state -> memory[addr]; 
+                                   set_hl_pair(state, val);
+                                   state -> pc += 2; 
+                           }
+                           break;
+                case 0x2b: set_hl_pair(state, get_hl_pair(state) - 1); //DCX H 
+                case 0x2c: e8080_inr(state, &state -> l); break; //INR L 
+                case 0x2d: e8080_dcr(state, &state -> l); break; //DCR L
                 case 0x2e: e8080_mvi(state, &state -> l, opcode[1]); break; //MVI L, D8
                 case 0x2f: e8080_cma(state); break;//CMA
+                case 0x31: //LXI SP, D16
+                           {
+                                   uint16_t val = ((opcode[2] << 8) | opcode[1]);
+                                   state -> sp = val;
+                                   state -> pc += 2; 
+                           }
+                case 0x32: //STA ADR
+                           {
+                                   uint16_t offset = (opcode[2] << 8) | (opcode[1]);
+                                   state -> memory[offset] = state -> a;
+                                   state -> pc += 2;
+                           }
+                           break;
                 case 0x33: state -> sp = state -> sp + 1; //INX SP
-                /*case 0x34: e8080_inr(state, &state -> m); break;//FIXXXXXX THESE AFFECT REGISTER PAIRS NOT SINGLE REGISTERS
-                case 0x35: e8080_dcr(state, &state -> m); break;//FIXXXXXXXXX*/
+                case 0x34: //INR M
+                           {
+                                uint16_t offset = get_hl_pair(state);
+                                uint8_t mem_val = state -> memory[offset] + 1;
+                                state -> memory[offset] = mem_val;
+                                state -> cc.z = ((mem_val & 0xff) == 0);
+                                state -> cc.s = ((mem_val & 0x80) == 0);
+                                state -> cc.p = Parity(mem_val & 0xff);
+                                state -> cc.ac = ((mem_val & 0xf) == 0);
+                           }
+                           break;
+                case 0x35: //DCR M 
+                           {
+                                uint16_t offset = get_hl_pair(state);
+                                uint8_t mem_val = state -> memory[offset] - 1;
+                                state -> memory[offset] = mem_val;
+                                state -> cc.z = ((mem_val & 0xff) == 0);
+                                state -> cc.s = ((mem_val & 0x80) == 0);
+                                state -> cc.p = Parity(mem_val & 0xff);
+                                state -> cc.ac = ((mem_val & 0xf) == 0);
+                           }
+                           break;
                 case 0x36: //MVI M, D8
                            {
                                    uint16_t offset = get_hl_pair(state);
@@ -337,6 +409,13 @@ int Emulate8080op(State8080* state){
                            break;
                 case 0x37: state -> cc.cy = ~(state -> cc.cy); break; //STC
                 case 0x39: e8080_dad(state, state->sp); break;//DAD SP
+                case 0x3a: //LDA ADR
+                           {
+                                   uint16_t offset = (opcode[2] << 8) | (opcode[1]);
+                                   state -> a = state -> memory[offset];
+                                   state -> pc += 2;
+                           }
+                           break; 
                 case 0x3b: state -> sp = state -> sp - 1; break; //DCX SP
                 case 0x3c: e8080_inr(state, &state -> a); break;
                 case 0x3d: e8080_dcr(state, &state -> a); break;
@@ -531,42 +610,42 @@ int Emulate8080op(State8080* state){
 				state -> a = ans & 0xff;
 
 			}
-		case 0x88: e8080_adc(state, &state -> a, state -> b, state -> cc.cy); break;
-		case 0x89: e8080_adc(state, &state -> a, state -> c, state -> cc.cy); break;
-		case 0x8a: e8080_adc(state, &state -> a, state -> d, state -> cc.cy); break;
-		case 0x8b: e8080_adc(state, &state -> a, state -> e, state -> cc.cy); break;
-		case 0x8c: e8080_adc(state, &state -> a, state -> h, state -> cc.cy); break;
-		case 0x8d: e8080_adc(state, &state -> a, state -> l, state -> cc.cy); break;
+		case 0x88: e8080_adc(state, &state -> a, state -> b, state -> cc.cy); break; //ADC B
+		case 0x89: e8080_adc(state, &state -> a, state -> c, state -> cc.cy); break; //ADC C
+		case 0x8a: e8080_adc(state, &state -> a, state -> d, state -> cc.cy); break; //ADC D
+		case 0x8b: e8080_adc(state, &state -> a, state -> e, state -> cc.cy); break; //ADC E
+		case 0x8c: e8080_adc(state, &state -> a, state -> h, state -> cc.cy); break; //ADC H
+		case 0x8d: e8080_adc(state, &state -> a, state -> l, state -> cc.cy); break; //ADC L
 		case 0x8e: //ADC M
 			   {
 				   uint16_t offset = (state -> h << 8) | (state -> l);
 				   e8080_adc(state, &state -> a, state -> memory[offset], state -> cc.cy);
 			   }
-		case 0x8f: e8080_adc(state, &state -> a, state -> a,  state-> cc.cy); break;
-                case 0x90: e8080_sub(state, &state -> a, state -> b); break;
-                case 0x91: e8080_sub(state, &state -> a, state -> c); break;
-                case 0x92: e8080_sub(state, &state -> a, state -> d); break;
-                case 0x93: e8080_sub(state, &state -> a, state -> e); break;
-                case 0x94: e8080_sub(state, &state -> a, state -> h); break;
-                case 0x95: e8080_sub(state, &state -> a, state -> l); break;
+		case 0x8f: e8080_adc(state, &state -> a, state -> a,  state-> cc.cy); break; //ADC A
+                case 0x90: e8080_sub(state, &state -> a, state -> b); break; //SUB B
+                case 0x91: e8080_sub(state, &state -> a, state -> c); break; //SUB C
+                case 0x92: e8080_sub(state, &state -> a, state -> d); break; //SUB D
+                case 0x93: e8080_sub(state, &state -> a, state -> e); break; //SUB E
+                case 0x94: e8080_sub(state, &state -> a, state -> h); break; //SUB H
+                case 0x95: e8080_sub(state, &state -> a, state -> l); break; //SUB L
                 case 0x96: //SUB M
                            {
                                    uint16_t offset = (state -> h << 8 | (state -> l));
                                    e8080_sub(state, &state -> a, state -> memory[offset]);
                            }
-                case 0x97: e8080_sub(state, &state -> a, state -> a); break;
-                case 0x98: e8080_sbb(state, &state -> a, state -> b, state -> cc.cy); break; 
-                case 0x99: e8080_sbb(state, &state -> a, state -> c, state -> cc.cy); break;
-                case 0x9a: e8080_sbb(state, &state -> a, state -> d, state -> cc.cy); break;
-                case 0x9b: e8080_sbb(state, &state -> a, state -> e, state -> cc.cy); break;
-                case 0x9c: e8080_sbb(state, &state -> a, state -> h, state -> cc.cy); break;
-                case 0x9d: e8080_sbb(state, &state -> a, state -> l, state -> cc.cy); break;
+                case 0x97: e8080_sub(state, &state -> a, state -> a); break; //SUB A
+                case 0x98: e8080_sbb(state, &state -> a, state -> b, state -> cc.cy); break; //SBB B 
+                case 0x99: e8080_sbb(state, &state -> a, state -> c, state -> cc.cy); break; //SBB C
+                case 0x9a: e8080_sbb(state, &state -> a, state -> d, state -> cc.cy); break; //SBB D
+                case 0x9b: e8080_sbb(state, &state -> a, state -> e, state -> cc.cy); break; //SBB E
+                case 0x9c: e8080_sbb(state, &state -> a, state -> h, state -> cc.cy); break; //SBB H
+                case 0x9d: e8080_sbb(state, &state -> a, state -> l, state -> cc.cy); break; //SBB L
                 case 0x9e: //SBB M
                            {
                                 uint16_t offset = (state -> h << 8 | (state -> l));
                                 e8080_sub(state, &state -> a, state -> memory[offset]);
                            }
-                case 0x9f: e8080_sbb(state, &state -> a, state -> a, state -> cc.cy); break;
+                case 0x9f: e8080_sbb(state, &state -> a, state -> a, state -> cc.cy); break; //SBB A
                 case 0xa0: e8080_ana(state, &state -> b); break; //ANA B
                 case 0xa1: e8080_ana(state, &state -> c); break; //ANA C
                 case 0xa2: e8080_ana(state, &state -> d); break; //ANA D
@@ -647,12 +726,13 @@ int Emulate8080op(State8080* state){
                 case 0xd0: ncond_ret(state, state -> cc.cy); break;//RNC
                 case 0xd1: e8080_pop(state, &state -> d, &state -> e); break; //POP D
                 case 0xd2: jmp_ncond(state, state -> cc.cy, opcode); break;//JNC ADR
-                                                                
+                case 0xd3: //OUT D8 COME BACKKKK                                               
                 case 0xd4: ncond_call(state, state -> cc.cy, opcode); break;//CNC ADR
                 case 0xd5: e8080_push(state, state -> d, state -> e); break; //PUSH D
                 case 0xd7: e8080_rst(state, get_hl_pair(state), 2); break; //RST 2
                 case 0xd8: cond_ret(state, state -> cc.cy); break;//RC
                 case 0xda: jmp_cond(state, state -> cc.cy, opcode); break;//JC ADR
+                case 0xdb: //IN D8 COME BACKKK
                 case 0xdc: cond_call(state, state -> cc.cy, opcode); break; //CC ADR
                 case 0xde: e8080_sbb(state, &state -> a, opcode[1], state -> cc.cy); break; //ISSUES???
                 case 0xdf: e8080_rst(state, get_hl_pair(state), 3); break; //RST 3
@@ -688,6 +768,16 @@ int Emulate8080op(State8080* state){
                            state -> pc = (state -> h << 8) | (state -> l);
                            break;
                 case 0xea: jmp_cond(state, state -> cc.p, opcode); break; //JPE ADR
+                case 0xeb: //XCHG
+                           {
+                                   uint8_t h_temp = state -> h;
+                                   uint8_t l_temp = state -> l;
+                                   state -> h = state -> d;
+                                   state -> l = state -> e; 
+                                   state -> d = h_temp;
+                                   state -> e = l_temp;
+                           }
+                           break;
                 case 0xec: cond_call(state, state -> cc.p, opcode); break; //CPE adr
                 case 0xee: //XRI D8
                            {
@@ -716,6 +806,7 @@ int Emulate8080op(State8080* state){
                            }
                            break;
                 case 0xf2: jmp_ncond(state, state -> cc.s, opcode); break;//JP ADR
+                case 0xf3: //DI COME BACKKKK
                 case 0xf4: ncond_call(state, state -> cc.s, opcode); break; //CP adr
                 case 0xf5: //PUSH PSW
                            {
@@ -741,7 +832,7 @@ int Emulate8080op(State8080* state){
                            }
                            break;
                 case 0xf7: e8080_rst(state, get_hl_pair(state), 6); break; //RST 6
-                case 0xf8: cond_ret(state, state -> cc.s); break;
+                case 0xf8: cond_ret(state, state -> cc.s); break; //RM
                 case 0xf9: //SPHL
                            {
                                    uint16_t offset = get_hl_pair(state);
@@ -749,6 +840,7 @@ int Emulate8080op(State8080* state){
                            }
                            break;
                 case 0xfa: jmp_cond(state, state -> cc.s, opcode); break;//JM ADR
+                case 0xfb: //EI COMEBACKKKK
                 case 0xfc: cond_call(state, state -> cc.s, opcode); break; //CM adr
 		case 0xfe: //CPI D8
                            {
