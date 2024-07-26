@@ -26,6 +26,7 @@ typedef struct State8080 {
 	uint8_t	int_enable;
 } State8080;
 
+#define FOR_CPUDIAG
 /* 8080 Disassembling algorithm:
  * 1. Read code into buffer
  * 2. Get pointer to start of buffer
@@ -431,9 +432,9 @@ static inline void e8080_add(State8080* state, uint8_t val, uint8_t carry){
 static inline void jmp_ncond(State8080* state, uint8_t cond, unsigned char *opcode){
         if(0 == cond){
                 state -> pc = (opcode[2] << 8) | opcode[1];
-        }else{
+        }/*else{
                 state -> pc += 2; 
-        }
+        }*/ //THIS MIGHT BE WRONG!!!
 }
 
 static inline void jmp_cond(State8080* state, uint8_t cond, unsigned char *opcode){
@@ -445,11 +446,36 @@ static inline void jmp_cond(State8080* state, uint8_t cond, unsigned char *opcod
 }
 
 static inline void e8080_call(State8080* state, unsigned char *opcode){
+   #ifdef FOR_CPUDIAG    
+            if (5 ==  ((opcode[2] << 8) | opcode[1]))    
+            {    
+                if (state->c == 9)    
+                {    
+                    uint16_t offset = (state->d<<8) | (state->e);    
+                    char *str = &state->memory[offset+3];  //skip the prefix bytes    
+                    while (*str != '$')    
+                        printf("%c", *str++);    
+                    printf("\n");    
+                }    
+                else if (state->c == 2)    
+                {    
+                    //saw this in the inspected code, never saw it called    
+                    printf ("print char routine called\n");    
+                }    
+            }    
+            else if (0 ==  ((opcode[2] << 8) | opcode[1]))    
+            {    
+                exit(0);    
+            }    
+            else    
+   #endif 
+        {
         uint16_t ret = state -> pc+2;
         state -> memory[state -> sp-1] = (ret >> 8) & 0xff;
         state -> memory[state -> sp-2] = (ret & 0xff);
         state -> sp = state -> sp - 2;
         state -> pc = (opcode[2] << 8) | opcode[1];
+        }
 }
 
 static inline void e8080_ret(State8080* state){
@@ -591,6 +617,7 @@ static inline void e8080_lxi(State8080* state, uint8_t* const rh, uint8_t* const
 int Emulate8080op(State8080* state){
 	unsigned char *opcode = &state->memory[state->pc];
         Disassemble8080op(state -> memory, state -> pc);
+        state -> pc += 1;
 	switch(*opcode){
 		case 0x00: break; //nop
 		case 0x01:	//LXI B,word
@@ -1015,7 +1042,7 @@ int Emulate8080op(State8080* state){
                            break;
                 case 0xc4: ncond_call(state, state -> cc.z, opcode); break; //CNZ adr
                 case 0xc5: e8080_push(state, state -> b, state -> c); break; //PUSH B
-		case 0xc6: e8080_add(state, opcode[1], 0); break; //ADI byte	//MIGHT CAUSE ISSUES!!!
+		case 0xc6: e8080_add(state, opcode[1], 0); state->pc++; break; //ADI byte	//MIGHT CAUSE ISSUES!!!
                 case 0xc7: e8080_rst(state, get_hl_pair(state), 0); break; //RST 0
 			   /*{
 				uint16_t ans = (uint16_t) state -> a + (uint16_t) opcode[1];
@@ -1133,6 +1160,7 @@ int Emulate8080op(State8080* state){
                                    state -> sp = state -> sp - 2;
         
                            }
+                           break;
                 case 0xf6: //ORI D8
                            {
                                    uint8_t x = state -> a | opcode[1];
@@ -1169,7 +1197,7 @@ int Emulate8080op(State8080* state){
 		case 0xff: e8080_rst(state, get_hl_pair(state), 7); break; //RST 7
 
 	}
-	state->pc +=1; //for opcode
+	//state->pc +=1; //for opcode
 
         printf("\tC=%d, P=%d, S=%d, Z=%d\n", state -> cc.cy, state -> cc.p, state -> cc.s, state -> cc.z);
         printf("\tA $%02x B $%02x C $%02x D $%02x E $%02x H $%02x L$%02x SP %04x\n", state -> a, state -> b, state -> c, state -> d, state -> e, state -> h, state -> l, state -> sp);
@@ -1209,12 +1237,20 @@ int main (int argc, char **argv){
         /*ReadIntoMemAt(state, "../space_invaders/invaders.h", 0);
         ReadIntoMemAt(state, "../space_invaders/invaders.g", 0x800);
         ReadIntoMemAt(state, "../space_invaders/invaders.f", 0x1000);
-        ReadIntoMemAt(state, "../space_invaders/invaders.e", 0x1800);
-        */
+        ReadIntoMemAt(state, "../space_invaders/invaders.e", 0x1800);*/
+        
         ReadIntoMemAt(state, "cpudiag.bin", 0x100);
         state -> memory[0] = 0xc3;
         state -> memory[1] = 0;
         state -> memory[2] = 0x01;
+
+        state->memory[368] = 0x7;
+
+        //SKIP DAA TEST
+        /*state -> memory[0x59c] = 0xc3;
+        state -> memory[0x59d] = 0xc2;
+        state -> memory[0x59e] = 0x05;*/
+
         while (done == 0){
                 done = Emulate8080op(state);
         }
