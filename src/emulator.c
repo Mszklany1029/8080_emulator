@@ -438,10 +438,8 @@ static inline void set_hl_pair(State8080* state, uint16_t val){
 }
 
 static inline void e8080_dad(State8080* state, uint16_t addend_pair){
-        uint16_t ans = get_hl_pair(state) + addend_pair;
-        //state -> cc.cy = (ans >> 16) & 1; 
-        state -> cc.cy = (ans > 0xff);
-        set_hl_pair(state, ans);
+        state -> cc.cy = ((get_hl_pair(state) + addend_pair) >> 16) & 1;
+        set_hl_pair(state, get_hl_pair(state) + addend_pair);
 }
 
 static inline void jmp_ncond(State8080* state, uint8_t cond, unsigned char *opcode){
@@ -461,7 +459,7 @@ static inline void jmp_cond(State8080* state, uint8_t cond, unsigned char *opcod
 }
 
 static inline void e8080_call(State8080* state, unsigned char *opcode){
-   #ifdef FOR_CPUDIAG    
+   /*#ifdef FOR_CPUDIAG    
             if (5 ==  ((opcode[2] << 8) | opcode[1]))    
             {    
                 if (state->c == 9)    
@@ -483,7 +481,7 @@ static inline void e8080_call(State8080* state, unsigned char *opcode){
                 exit(0);    
             }    
             else    
-   #endif 
+   #endif*/ 
         {
         uint16_t ret = state -> pc+2;
         state -> memory[state -> sp-1] = (ret >> 8) & 0xff;
@@ -536,7 +534,7 @@ static inline void e8080_rst(State8080* state, uint16_t hl_pair, uint8_t nnn){
 static inline void e8080_rlc(State8080* state){
         uint8_t x = state -> a;
         state -> a = ((x << 1) | x >> 7); //COME BACK
-        state -> cc.cy = (1 == (1 >> 7));
+        state -> cc.cy = (1 == (x >> 7));
 }
 
 static inline void e8080_rrc(State8080* state){
@@ -1208,7 +1206,7 @@ int Emulate8080op(State8080* state){
                 case 0xf9: //SPHL
                            {
                                    uint16_t offset = get_hl_pair(state);
-                                   state -> sp = state -> memory[offset];
+                                   state -> sp = offset;
                            }
                            break;
                 case 0xfa: jmp_cond(state, state -> cc.s, opcode); break;//JM ADR
