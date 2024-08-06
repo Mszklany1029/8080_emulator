@@ -1,31 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdint.h>
-typedef struct ConditionCodes {
-	uint8_t z:1; //zero flag: set if value is 0
-	uint8_t s:1; //sign flag: set if most significant bit is 1 (negative)
-	uint8_t p:1; //parity flag: set if even, reset if odd
-	uint8_t cy:1; //carry flag; set if high order bit is borrowed or carried
-	uint8_t ac:1; //aux carry: set if carry out of bit 3 into bit 4
-	uint8_t pad:3; //COME BACK TO THIS?? 
-
-} ConditionCodes;
-
-typedef struct State8080 {
-	uint8_t a;
-	uint8_t b;
-	uint8_t c;
-	uint8_t d;
-	uint8_t e;
-	uint8_t h;
-	uint8_t l;
-	uint16_t sp;
-	uint16_t pc;
-	uint8_t	*memory;
-	struct ConditionCodes	cc;
-	uint8_t	int_enable;
-} State8080;
-
+#include "emulator.h"
 #define FOR_CPUDIAG
 /* 8080 Disassembling algorithm:
  * 1. Read code into buffer
@@ -46,6 +19,28 @@ typedef struct State8080 {
  * Note to self: $ = hex, # = literal
  * So if we have #$%02x%02x, we want a hexadecimal literal where each byte is 2 characters long
  */
+
+unsigned char cycles8080[] = {
+	4, 10, 7, 5, 5, 5, 7, 4, 4, 10, 7, 5, 5, 5, 7, 4, //0x00..0x0f
+	4, 10, 7, 5, 5, 5, 7, 4, 4, 10, 7, 5, 5, 5, 7, 4, //0x10..0x1f
+	4, 10, 16, 5, 5, 5, 7, 4, 4, 10, 16, 5, 5, 5, 7, 4, //etc
+	4, 10, 13, 5, 10, 10, 10, 4, 4, 10, 13, 5, 5, 5, 7, 4,
+	
+	5, 5, 5, 5, 5, 5, 7, 5, 5, 5, 5, 5, 5, 5, 7, 5, //0x40..0x4f
+	5, 5, 5, 5, 5, 5, 7, 5, 5, 5, 5, 5, 5, 5, 7, 5,
+	5, 5, 5, 5, 5, 5, 7, 5, 5, 5, 5, 5, 5, 5, 7, 5,
+	7, 7, 7, 7, 7, 7, 7, 7, 5, 5, 5, 5, 5, 5, 7, 5,
+	
+	4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4, //0x80..8x4f
+	4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4,
+	4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4,
+	4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4,
+	
+	11, 10, 10, 10, 17, 11, 7, 11, 11, 10, 10, 10, 10, 17, 7, 11, //0xc0..0xcf
+	11, 10, 10, 10, 17, 11, 7, 11, 11, 10, 10, 10, 10, 17, 7, 11, 
+	11, 10, 10, 18, 17, 11, 7, 11, 11, 5, 10, 5, 17, 17, 7, 11, 
+	11, 10, 10, 4, 17, 11, 7, 11, 11, 5, 10, 4, 17, 17, 7, 11, 
+};
 
 int Disassemble8080op(unsigned char *buffer, int pc){
 	unsigned char *code = &buffer[pc];
@@ -1231,13 +1226,17 @@ int Emulate8080op(State8080* state){
         printf("\n");
         printf("\tC=%d, P=%d, S=%d, Z=%d, AC=%d\n", state -> cc.cy, state -> cc.p, state -> cc.s, state -> cc.z, state -> cc.ac);
         printf("\tA $%02x B $%02x C $%02x D $%02x E $%02x H $%02x L$%02x SP %04x\n", state -> a, state -> b, state -> c, state -> d, state -> e, state -> h, state -> l, state -> sp);
-        return 0;
+        return cycles8080[*opcode];
 }
 
+void genInterrupt(State8080* state, int interrupt_num){
+        //Push PC
+        e8080_push(state, (state -> pc & 0xff00)>>8, (state -> pc & 0xff));
+        //set pc to low memory vector
+        //same as "RST interrupt_num" instruction
+        state -> pc = 8 * interrupt_num;
 
-
-
-
+}
 
 void ReadIntoMemAt(State8080* state, char* filename, uint32_t offset){
         FILE *f = fopen(filename, "rb");
@@ -1285,32 +1284,3 @@ int main (int argc, char **argv){
         }
         return 0;
 }
-
-
-/*int main(int argc, char**argv){
-	FILE *f = fopen(argv[1], "rb");
-	if (f==NULL){
-		printf("Error: Could not open %s\n", argv[1]);
-		exit(1);
-	}
-	//get file size and read it into memory buffer
-	fseek(f, 0L, SEEK_END);
-	int fsize = ftell(f);
-	fseek(f, 0L, SEEK_SET);
-        
-        unsigned char *buffer = malloc(fsize);
-
-	fread(buffer, fsize, 1, f);
-	fclose(f);
-
-	int prog_counter = 0;
-
-	while(prog_counter < fsize){
-		int advance = Disassemble8080op(buffer, prog_counter);
-                //Emulate8080op(buffer);
-		prog_counter += advance;
-		printf("\n");
-	}
-	return 0;
-}*/
-
