@@ -15,5 +15,18 @@ uint8_t read_input2(void){
 
 uint8_t read_shft(void){
         uint16_t temp = (shift_hi << 8) | shift_low; 
+        uint8_t a = ((temp >> (8 - shift_offset)) & 0xff);
+        return a; 
         //COME BACK
 }
+
+void wr_shft_amt(uint8_t data){
+        shift_offset = data & 0x7;
+}
+
+void wr_shft_data(uint8_t data){
+        shift_low = shift_hi;
+        shift_hi = data; 
+}
+
+
