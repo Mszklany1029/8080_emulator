@@ -13,7 +13,7 @@ void init_ports(State8080 *state){
         state->input[INP2] = read_input2; 
         state->input[SHFT_IN] = read_shft;
 
-        state->output[SHFTAMNT] = wr_shft; 
+        state->output[SHFTAMNT] = wr_shft_amt; 
         state->output[SHFT_DATA] = wr_shft_data; 
         
         state->output[SOUND1] = wr_snd1; 
@@ -52,7 +52,7 @@ int main(void){
         }
         
         //init ports
-        init_ports(&state);
+        init_ports(state);
         //start sdl
         if(!init_SDL()){
                 fprintf(stderr, "ERROR INITIALIZING SDL: %s\n", SDL_GetError());
@@ -80,7 +80,7 @@ int main(void){
         //actually emulate CPU
         while(!state->exit){
                 //DRAW DISPLAY HERE
-                draw_display(window, surface, &state);
+                draw_display(window, surface, state);
                 state->exit = !input_handler(); 
                 uint64_t ticks = SDL_GetTicks64(); 
                 

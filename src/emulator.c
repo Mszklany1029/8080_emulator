@@ -631,7 +631,7 @@ static inline void IN(State8080* state, uint8_t op){
         state -> a = state -> input[op](); 
 }
 
-static inline void OUT(State8080* state, uint_t op){
+static inline void OUT(State8080* state, uint8_t op){
         state -> output[op](state -> a);
 }
 
@@ -736,7 +736,7 @@ int Emulate8080op(State8080* state){
                                    state -> pc += 2;
                            }
                            break;
-                case 0x33: state -> sp = state -> sp + 1; //INX SP
+                case 0x33: state -> sp = state -> sp + 1; break; //INX SP
                 case 0x34: //INR M
                            {
                                 uint16_t offset = get_hl_pair(state);
@@ -1277,14 +1277,14 @@ State8080* init8080(void){
         return state;
 }
 
-int main (int argc, char **argv){
+/*int main (int argc, char **argv){
         int done = 0;
         int vblankcycles = 0;
         State8080* state = init8080();
-        /*ReadIntoMemAt(state, "../space_invaders/invaders.h", 0);
+        ReadIntoMemAt(state, "../space_invaders/invaders.h", 0);
         ReadIntoMemAt(state, "../space_invaders/invaders.g", 0x800);
         ReadIntoMemAt(state, "../space_invaders/invaders.f", 0x1000);
-        ReadIntoMemAt(state, "../space_invaders/invaders.e", 0x1800);*/        
+        ReadIntoMemAt(state, "../space_invaders/invaders.e", 0x1800)       
         ReadIntoMemAt(state, "cpudiag.bin", 0x100);
         state -> memory[0] = 0xc3;
         state -> memory[1] = 0;
@@ -1301,4 +1301,4 @@ int main (int argc, char **argv){
                 done = Emulate8080op(state);
         }
         return 0;
-}
+}*/

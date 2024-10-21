@@ -1,29 +1,29 @@
 #include "machine.h"
 
 typedef enum{
-        CREDIT = 1; 
-        START_P2 = (1 << 1);
-        START_P1 = (1 << 2);
-        P1_SHOT = (1 << 4);
-        P1_LEFT = (1 << 5);
-        P1_RIGHT = (1 << 6);
+        CREDIT = 1, 
+        START_P2 = (1 << 1),
+        START_P1 = (1 << 2),
+        P1_SHOT = (1 << 4),
+        P1_LEFT = (1 << 5),
+        P1_RIGHT = (1 << 6),
 
-        TILT = (1 << 2);
-        P2_SHOT = (1 << 4);
-        P2_LEFT = (1 << 5);
-        P2_RIGHT = (1 << 6);
+        TILT = (1 << 2),
+        P2_SHOT = (1 << 4),
+        P2_LEFT = (1 << 5),
+        P2_RIGHT = (1 << 6),
 
-        UFO = 1; 
-        SHOT = (1 << 1);
-        FLASH = (1 << 2);
-        INVADER_DIE = (1 << 3); 
-        EXTRA_LIFE = (1 << 4); 
+        UFO = 1, 
+        SHOT = (1 << 1),
+        FLASH = (1 << 2),
+        INVADER_DIE = (1 << 3), 
+        EXTRA_LIFE = (1 << 4), 
 
-        FLEET_MOV_1 = 1; 
-        FLEET_MOV_2 = (1 << 1);
-        FLEET_MOV_3 = (1 << 2); 
-        FLEET_MOV_4 = (1 << 3);
-        UFO_HIT = (1 << 4);
+        FLEET_MOV_1 = 1, 
+        FLEET_MOV_2 = (1 << 1),
+        FLEET_MOV_3 = (1 << 2), 
+        FLEET_MOV_4 = (1 << 3),
+        UFO_HIT = (1 << 4)
 
 }PORT_BITS;
 
@@ -62,6 +62,14 @@ void wr_shft_data(uint8_t data){
         shift_low = shift_hi;
         shift_hi = data; 
 }
+
+void wr_snd1(uint8_t data){}
+
+void wr_snd2(uint8_t data){}
+
+void wr_watchdog(uint8_t data){}
+
+
 
 static void pixel_set(SDL_Surface *surface, int x_coord, int y_coord, long color){
         uint32_t *pixels = (uint32_t*) surface->pixels;
@@ -105,9 +113,9 @@ void draw_display(SDL_Window *window, SDL_Surface *surface, const State8080 *sta
                     }
 
                     if (byte & (1 << k)) {
-                        _set_pixel(surface, final_x, final_y, color);
+                        pixel_set(surface, final_x, final_y, color);
                     } else {
-                        _set_pixel(surface, final_x, final_y, 0x000000);
+                        pixel_set(surface, final_x, final_y, 0x000000);
                     }
                 }
             }
@@ -183,7 +191,6 @@ int input_handler(void){
                                         break; 
                                 }
                         }
-                }
         }
         return 1; 
 }

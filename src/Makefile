@@ -6,7 +6,7 @@ COMPILER_FLAGS = -Wall -Wextra -ggdb
 LINKER_FLAGS = -lSDL2
 
 $(EXE): Platform.o Machine.o Emulator.o
-	$(CC) $(COMPILER_FLAGS) $(LINKER_FLAGS) Platform.o Machine.o Emulator.o -o $@
+	$(CC) $(COMPILER_FLAGS) Platform.o Machine.o Emulator.o $(LINKER_FLAGS) -o $@
 
 Platform.o: platform.c machine.h emulator.h
 	$(CC) $(COMPILER_FLAGS) $(LINKER_FLAGS) -c platform.c -o $@
@@ -16,3 +16,6 @@ Machine.o: machine.c machine.h emulator.h
 
 Emulator.o: emulator.c emulator.h
 	$(CC) $(COMPILER_FLAGS) -c emulator.c -o $@
+
+clean:
+	rm -f *.o

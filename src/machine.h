@@ -1,9 +1,6 @@
 #ifndef MACHINE_H
 #define MACHINE_H
 
-
-
-
 #include "emulator.h"
 #include <SDL2/SDL.h>
 
