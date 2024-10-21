@@ -1,3 +1,7 @@
+#ifndef MACHINE_H
+#define MACHINE_H
+
+
 
 
 #include "emulator.h"
@@ -11,7 +15,30 @@
  * and start the whole emulation cycle
  */ 
 
+#define WIDTH 224
+#define LENGTH 256
+#define SCREEN_BYTES 7168
+
+#define REFRESH_RATE 60
+#define CLOCK_SPEED 2000000
+#define VBLANK_RATE (CLOCK_SPEED/REFRESH_RATE)
+#define VRAM 0x2400
+
+
 //IO ports
+
+//READ PORTS
+#define INP0 0
+#define INP1 1
+#define INP2 2
+#define SHFT_IN 3
+
+//WRITE PORTS
+#define SHFTAMNT 2
+#define SOUND1 3
+#define SHFT_DATA 4
+#define SOUND2 5
+#define WATCHDOG 6
 
 uint8_t read_input1(void);
 uint8_t read_input2(void);
@@ -23,4 +50,7 @@ void wr_snd2(uint8_t data);
 void wr_watchdog(uint8_t data);
 
 
-
+int input_handler(void); //MAYBE RETURN BOOL INStEAD?
+//We need functions to draw the display
+//initialize and quit the audio
+//and handle the input

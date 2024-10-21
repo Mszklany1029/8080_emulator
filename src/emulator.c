@@ -627,10 +627,19 @@ static inline void e8080_lxi(State8080* state, uint8_t* const rh, uint8_t* const
         state -> pc += 2;
 }
 
+static inline void IN(State8080* state, uint8_t op){
+        state -> a = state -> input[op](); 
+}
+
+static inline void OUT(State8080* state, uint_t op){
+        state -> output[op](state -> a);
+}
+
 int Emulate8080op(State8080* state){
 	unsigned char *opcode = &state->memory[state->pc];
         Disassemble8080op(state -> memory, state -> pc);
         state -> pc += 1;
+        state -> cycle_total += cycles8080[*opcode]; 
 	switch(*opcode){
 		case 0x00: break; //nop
 		case 0x01:	//LXI B,word
@@ -1085,7 +1094,9 @@ int Emulate8080op(State8080* state){
                 case 0xd0: ncond_ret(state, state -> cc.cy); break;//RNC
                 case 0xd1: e8080_pop(state, &state -> d, &state -> e); break; //POP D
                 case 0xd2: jmp_ncond(state, state -> cc.cy, opcode); break;//JNC ADR
-                case 0xd3: UnimplementedInstruction(state); break;//OUT D8 COME BACKKKK                                               
+                case 0xd3: {
+                                   OUT(state, opcode[0]);
+                           }break;//OUT D8 COME BACKKKK                                               
                 case 0xd4: ncond_call(state, state -> cc.cy, opcode); break;//CNC ADR
                 case 0xd5: e8080_push(state, state -> d, state -> e); break; //PUSH D
                 case 0xd6: e8080_sub(state, opcode[1]); state->pc += 1; break; //SUI D8
@@ -1093,7 +1104,9 @@ int Emulate8080op(State8080* state){
                 case 0xd8: cond_ret(state, state -> cc.cy); break;//RC
                 case 0xd9: UnimplementedInstruction(state); break;
                 case 0xda: jmp_cond(state, state -> cc.cy, opcode); break;//JC ADR
-                case 0xdb: UnimplementedInstruction(state); break;//IN D8 COME BACKKK
+                case 0xdb:{
+                                  IN(state, opcode[0]);
+                          }break;//IN D8 COME BACKKK
                 case 0xdc: cond_call(state, state -> cc.cy, opcode); break; //CC ADR
                 case 0xdd: UnimplementedInstruction(state); break;
                 case 0xde: e8080_sbb(state, &state -> a, opcode[1], state -> cc.cy); state -> pc += 1; break;//SBI D8 //ISSUES???
@@ -1235,10 +1248,9 @@ void genInterrupt(State8080* state, int interrupt_num){
         //set pc to low memory vector
         //same as "RST interrupt_num" instruction
         state -> pc = 8 * interrupt_num;
-
 }
 
-void ReadIntoMemAt(State8080* state, char* filename, uint32_t offset){
+bool ReadIntoMemAt(State8080* state, char* filename, uint32_t offset){
         FILE *f = fopen(filename, "rb");
         if (f == NULL){
                 printf("error: Could not open %s\n", filename);
@@ -1251,11 +1263,16 @@ void ReadIntoMemAt(State8080* state, char* filename, uint32_t offset){
         uint8_t *buffer = &state -> memory[offset];
         fread(buffer, fsize, 1, f);
         fclose(f);
+        return true; 
 }
 
 State8080* init8080(void){
         State8080* state = calloc(1, sizeof(State8080));
         state -> memory = malloc(0x10000); //16k
+        
+        state -> exit = false; 
+        state -> cycle_total = 0; 
+
         return state;
 }
 
