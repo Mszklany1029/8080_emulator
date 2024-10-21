@@ -18,6 +18,7 @@
 #define WIDTH 224
 #define LENGTH 256
 #define SCREEN_BYTES 7168
+#define SCALE 1
 
 #define REFRESH_RATE 60
 #define CLOCK_SPEED 2000000
@@ -49,8 +50,11 @@ void wr_shft_data(uint8_t data);
 void wr_snd2(uint8_t data);
 void wr_watchdog(uint8_t data);
 
+void draw_display(SDL_Window *window, SDL_Surface *surface, const State8080 *state);
 
 int input_handler(void); //MAYBE RETURN BOOL INStEAD?
 //We need functions to draw the display
 //initialize and quit the audio
 //and handle the input
+
+#endif

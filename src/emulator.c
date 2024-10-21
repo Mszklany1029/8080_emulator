@@ -1248,6 +1248,7 @@ void genInterrupt(State8080* state, int interrupt_num){
         //set pc to low memory vector
         //same as "RST interrupt_num" instruction
         state -> pc = 8 * interrupt_num;
+        state -> cycle_total += 3;
 }
 
 bool ReadIntoMemAt(State8080* state, char* filename, uint32_t offset){

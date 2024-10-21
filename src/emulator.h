@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-
+#include <stdbool.h>
 
 typedef uint8_t (*input_ptr)(void);
 typedef void (*output_ptr)(uint8_t);

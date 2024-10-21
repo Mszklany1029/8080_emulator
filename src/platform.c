@@ -1,8 +1,9 @@
 #include "emulator.h"
 #include "machine.h"
 #include <stdio.h>
-#include <SDL2/SDL.h>
+#include <stdbool.h>
 
+#include <SDL2/SDL.h>
 //What needs to go here:
 //Setup ports to bind them to CPUIO memory 
 //Initialize SDL and create the window
@@ -77,23 +78,28 @@ int main(void){
         //COME ABACKKKK
         
         //actually emulate CPU
-        while(!state.exit){
+        while(!state->exit){
                 //DRAW DISPLAY HERE
-
-                state.exit = !input_handler(); 
+                draw_display(window, surface, &state);
+                state->exit = !input_handler(); 
                 uint64_t ticks = SDL_GetTicks64(); 
                 
-                while(state8080.cycle_total < (VBLANK_RATE/2)){
+                while(state->cycle_total < (VBLANK_RATE/2)){
                         Emulate8080op(state);
                 }
                 genInterrupt(state, 1);
 
-                while(state8080.cycle_total < (VBLANK_RATE)){
+                while(state->cycle_total < (VBLANK_RATE)){
                         Emulate8080op(state);
                 }
                 genInterrupt(state, 2);
 
+                state -> cycle_total = 0; 
+                SDL_Delay((1000/REFRESH_RATE) - (SDL_GetTicks64() - ticks));
+
         }
+        SDL_FreeSurface(surface);
+        SDL_DestroyWindow(window);
 
 }
 

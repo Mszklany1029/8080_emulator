@@ -63,6 +63,62 @@ void wr_shft_data(uint8_t data){
         shift_hi = data; 
 }
 
+static void pixel_set(SDL_Surface *surface, int x_coord, int y_coord, long color){
+        uint32_t *pixels = (uint32_t*) surface->pixels;
+        pixels[y_coord * (surface->w) + x_coord] = color; 
+
+}
+
+
+
+
+void draw_display(SDL_Window *window, SDL_Surface *surface, const State8080 *state) {
+    for (int i = 0; i < SCREEN_BYTES; i++) {
+        uint8_t byte = state->memory[VRAM + i];
+
+        int y = (((LENGTH * SCALE) - 1) - ((i % 32) * (8 * (SCALE))));
+        int x = ((i / 32)) * SCALE;
+
+        for (int k = 0; k < 8; k++) {
+            int tmp_y = y - (k * (SCALE));
+
+            for (int ys = 0; ys < SCALE; ys++) {
+                for (int xs = 0; xs < SCALE; xs++) {
+                    int final_x = x + xs;
+                    int final_y = tmp_y - ys;
+                    long color;
+
+                    if (final_y >= 0 && final_y < 32 * SCALE) {
+                        color = 0xFFFFFF;
+                    }else if (final_y >= 32 * SCALE && final_y < 64 * SCALE) {
+                        color = 0xFF0000;
+                    } else if (final_y >= 64 * SCALE && final_y < 184 * SCALE) {
+                        color = 0xFFFFFF;
+                    } else if (final_y >= 184 * SCALE && final_y < 240 * SCALE) {
+                        color = 0x00FF00;
+                    } else if (final_y >= 240 * SCALE && final_y < 256 * SCALE && final_x >= 0 && final_x < 16 * SCALE) {
+                        color = 0xFFFFFF;
+                    } else if (final_y >= 240 * SCALE && final_y < 256 * SCALE && final_x >= 16 * SCALE && final_x < 134 * SCALE) {
+                        color = 0x00FF00;
+                    } else if (final_y >= 240 * SCALE && final_y < 256 * SCALE && final_x >= 134 * SCALE && final_x < 224 * SCALE) {
+                        color = 0xFFFFFF;
+                    }
+
+                    if (byte & (1 << k)) {
+                        _set_pixel(surface, final_x, final_y, color);
+                    } else {
+                        _set_pixel(surface, final_x, final_y, 0x000000);
+                    }
+                }
+            }
+        }
+    }
+
+    SDL_UpdateWindowSurface(window);
+}
+
+
+
 int input_handler(void){
         while(SDL_PollEvent(&e)){
                 SDL_Keycode key = e.key.keysym.sym;
